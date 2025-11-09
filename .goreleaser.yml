@@ -1,0 +1,19 @@
+version: 2
+
+project_name: headscale-operator
+
+# Skip building binaries
+builds:
+  - skip: true
+
+# Skip creating archives since we're not building binaries
+archives:
+  - format: binary
+
+# Skip checksums since we have no binaries
+checksum:
+  disable: true
+
+# Use GitHub's native changelog generation
+changelog:
+  use: github-native
