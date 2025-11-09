@@ -1,0 +1,21 @@
+{{- if .Values.metrics.enabled }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "headscale-operator.fullname" . }}-metrics
+  namespace: {{ include "headscale-operator.namespace" . }}
+  labels:
+    {{- include "headscale-operator.labels" . | nindent 4 }}
+    {{- with .Values.podLabels }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+spec:
+  type: {{ .Values.service.type }}
+  ports:
+  - name: https
+    port: {{ .Values.service.port }}
+    protocol: TCP
+    targetPort: {{ .Values.metrics.port }}
+  selector:
+    {{- include "headscale-operator.selectorLabels" . | nindent 4 }}
+{{- end }}

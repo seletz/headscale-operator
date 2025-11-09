@@ -1,0 +1,53 @@
+Thank you for installing {{ .Chart.Name }}!
+
+Your release is named {{ .Release.Name }}.
+
+The Headscale Operator has been deployed to namespace: {{ include "headscale-operator.namespace" . }}
+
+To learn more about the release, try:
+
+  $ helm status {{ .Release.Name }} -n {{ .Release.Namespace }}
+  $ helm get all {{ .Release.Name }} -n {{ .Release.Namespace }}
+
+The operator is now running and ready to manage Headscale instances.
+
+To create a Headscale instance, create a Headscale custom resource:
+
+  apiVersion: headscale.infrado.cloud/v1beta1
+  kind: Headscale
+  metadata:
+    name: headscale-sample
+    namespace: {{ include "headscale-operator.namespace" . }}
+  spec:
+    version: "0.23.0"
+    replicas: 1
+    config:
+      server_url: https://headscale.example.com
+      listen_addr: 0.0.0.0:8080
+      database:
+        type: sqlite
+        sqlite:
+          path: /var/lib/headscale/db.sqlite
+      dns:
+        magic_dns: true
+        base_domain: example.com
+
+Save this to a file (e.g., headscale-sample.yaml) and apply it:
+
+  $ kubectl apply -f headscale-sample.yaml
+
+To check the status of your Headscale instance:
+
+  $ kubectl get headscales -n {{ include "headscale-operator.namespace" . }}
+  $ kubectl describe headscale headscale-sample -n {{ include "headscale-operator.namespace" . }}
+
+For more information, visit:
+  - GitHub: https://github.com/infradohq/headscale-operator
+  - Headscale Documentation: https://github.com/juanfont/headscale
+
+{{- if .Values.metrics.enabled }}
+
+Metrics are enabled and available at:
+  Service: {{ include "headscale-operator.fullname" . }}-controller-manager-metrics-service
+  Port: {{ .Values.service.port }}
+{{- end }}

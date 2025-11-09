@@ -1,0 +1,18 @@
+apiVersion: v2
+name: headscale-operator
+description: A Helm chart for deploying the Headscale Operator on Kubernetes
+type: application
+version: 0.0.1
+appVersion: "v0.1.0"
+home: https://github.com/infradohq/headscale-operator
+sources:
+  - https://github.com/infradohq/headscale-operator
+keywords:
+  - headscale
+  - tailscale
+  - vpn
+  - wireguard
+  - operator
+maintainers:
+  - name: infrado
+    url: https://github.com/infradohq

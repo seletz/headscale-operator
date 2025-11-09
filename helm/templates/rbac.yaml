@@ -1,0 +1,177 @@
+{{- if .Values.rbac.create }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: {{ include "headscale-operator.fullname" . }}-manager-role
+  labels:
+    {{- include "headscale-operator.labels" . | nindent 4 }}
+rules:
+- apiGroups:
+  - ""
+  resources:
+  - configmaps
+  - services
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - ""
+  resources:
+  - persistentvolumeclaims
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - apps
+  resources:
+  - statefulsets
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - headscale.infrado.cloud
+  resources:
+  - headscales
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - headscale.infrado.cloud
+  resources:
+  - headscales/finalizers
+  verbs:
+  - update
+- apiGroups:
+  - headscale.infrado.cloud
+  resources:
+  - headscales/status
+  verbs:
+  - get
+  - patch
+  - update
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: {{ include "headscale-operator.fullname" . }}-manager-rolebinding
+  labels:
+    {{- include "headscale-operator.labels" . | nindent 4 }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: {{ include "headscale-operator.fullname" . }}-manager-role
+subjects:
+- kind: ServiceAccount
+  name: {{ include "headscale-operator.serviceAccountName" . }}
+  namespace: {{ include "headscale-operator.namespace" . }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: {{ include "headscale-operator.fullname" . }}-leader-election-role
+  namespace: {{ include "headscale-operator.namespace" . }}
+  labels:
+    {{- include "headscale-operator.labels" . | nindent 4 }}
+rules:
+- apiGroups:
+  - ""
+  resources:
+  - configmaps
+  verbs:
+  - get
+  - list
+  - watch
+  - create
+  - update
+  - patch
+  - delete
+- apiGroups:
+  - coordination.k8s.io
+  resources:
+  - leases
+  verbs:
+  - get
+  - list
+  - watch
+  - create
+  - update
+  - patch
+  - delete
+- apiGroups:
+  - ""
+  resources:
+  - events
+  verbs:
+  - create
+  - patch
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: {{ include "headscale-operator.fullname" . }}-leader-election-rolebinding
+  namespace: {{ include "headscale-operator.namespace" . }}
+  labels:
+    {{- include "headscale-operator.labels" . | nindent 4 }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: {{ include "headscale-operator.fullname" . }}-leader-election-role
+subjects:
+- kind: ServiceAccount
+  name: {{ include "headscale-operator.serviceAccountName" . }}
+  namespace: {{ include "headscale-operator.namespace" . }}
+{{- if .Values.metrics.enabled }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: {{ include "headscale-operator.fullname" . }}-metrics-auth-role
+  labels:
+    {{- include "headscale-operator.labels" . | nindent 4 }}
+rules:
+- apiGroups:
+  - authentication.k8s.io
+  resources:
+  - tokenreviews
+  verbs:
+  - create
+- apiGroups:
+  - authorization.k8s.io
+  resources:
+  - subjectaccessreviews
+  verbs:
+  - create
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: {{ include "headscale-operator.fullname" . }}-metrics-auth-rolebinding
+  labels:
+    {{- include "headscale-operator.labels" . | nindent 4 }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: {{ include "headscale-operator.fullname" . }}-metrics-auth-role
+subjects:
+- kind: ServiceAccount
+  name: {{ include "headscale-operator.serviceAccountName" . }}
+  namespace: {{ include "headscale-operator.namespace" . }}
+{{- end }}
+{{- end }}
