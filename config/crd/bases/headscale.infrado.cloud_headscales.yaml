@@ -169,9 +169,11 @@ spec:
                               is enabled
                             type: boolean
                           ipv4:
+                            default: 198.51.100.1
                             description: IPv4 is the public IPv4 address
                             type: string
                           ipv6:
+                            default: 2001:db8::1
                             description: IPv6 is the public IPv6 address
                             type: string
                           private_key_path:
@@ -208,6 +210,8 @@ spec:
                           updates
                         type: string
                       urls:
+                        default:
+                        - https://controlplane.tailscale.com/derpmap/default
                         description: URLs is the list of external DERP map URLs
                         items:
                           type: string
@@ -491,7 +495,7 @@ spec:
                 description: Replicas indicates the number of Headscale instances
                   to deploy.
                 format: int32
-                minimum: 1
+                minimum: 0
                 type: integer
               version:
                 description: Version indicates the version of Headscale to deploy.

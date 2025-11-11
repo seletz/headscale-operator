@@ -54,7 +54,7 @@ type DERPServerConfig struct {
 	// Enabled indicates if the embedded DERP server is enabled
 	// +kubebuilder:default=false
 	// +optional
-	Enabled bool `json:"enabled,omitempty"`
+	Enabled *bool `json:"enabled,omitempty"`
 
 	// RegionID is the region ID for the embedded DERP server
 	// +kubebuilder:default=999
@@ -74,7 +74,7 @@ type DERPServerConfig struct {
 	// VerifyClients indicates whether to verify clients
 	// +kubebuilder:default=true
 	// +optional
-	VerifyClients bool `json:"verify_clients,omitempty"`
+	VerifyClients *bool `json:"verify_clients,omitempty"`
 
 	// STUNListenAddr is the address for STUN connections
 	// +kubebuilder:default="0.0.0.0:3478"
@@ -89,13 +89,15 @@ type DERPServerConfig struct {
 	// AutomaticallyAddEmbeddedDerpRegion indicates whether to automatically add the embedded DERP region
 	// +kubebuilder:default=true
 	// +optional
-	AutomaticallyAddEmbeddedDerpRegion bool `json:"automatically_add_embedded_derp_region,omitempty"`
+	AutomaticallyAddEmbeddedDerpRegion *bool `json:"automatically_add_embedded_derp_region,omitempty"`
 
 	// IPv4 is the public IPv4 address
+	// +kubebuilder:default="198.51.100.1"
 	// +optional
 	IPv4 string `json:"ipv4,omitempty"`
 
 	// IPv6 is the public IPv6 address
+	// +kubebuilder:default="2001:db8::1"
 	// +optional
 	IPv6 string `json:"ipv6,omitempty"`
 }
@@ -104,9 +106,10 @@ type DERPServerConfig struct {
 type DERPConfig struct {
 	// Server configuration for embedded DERP server
 	// +optional
-	Server DERPServerConfig `json:"server,omitempty"`
+	Server DERPServerConfig `json:"server"`
 
 	// URLs is the list of external DERP map URLs
+	// +kubebuilder:default={"https://controlplane.tailscale.com/derpmap/default"}
 	// +optional
 	URLs []string `json:"urls,omitempty"`
 
@@ -117,7 +120,7 @@ type DERPConfig struct {
 	// AutoUpdateEnabled indicates whether to auto-update DERP maps
 	// +kubebuilder:default=true
 	// +optional
-	AutoUpdateEnabled bool `json:"auto_update_enabled,omitempty"`
+	AutoUpdateEnabled *bool `json:"auto_update_enabled,omitempty"`
 
 	// UpdateFrequency is how often to check for DERP updates
 	// +kubebuilder:default="3h"
@@ -130,17 +133,17 @@ type GormConfig struct {
 	// PrepareStmt enables prepared statements
 	// +kubebuilder:default=true
 	// +optional
-	PrepareStmt bool `json:"prepare_stmt,omitempty"`
+	PrepareStmt *bool `json:"prepare_stmt,omitempty"`
 
 	// ParameterizedQueries enables parameterized queries
 	// +kubebuilder:default=true
 	// +optional
-	ParameterizedQueries bool `json:"parameterized_queries,omitempty"`
+	ParameterizedQueries *bool `json:"parameterized_queries,omitempty"`
 
 	// SkipErrRecordNotFound skips "record not found" errors
 	// +kubebuilder:default=true
 	// +optional
-	SkipErrRecordNotFound bool `json:"skip_err_record_not_found,omitempty"`
+	SkipErrRecordNotFound *bool `json:"skip_err_record_not_found,omitempty"`
 
 	// SlowThreshold is the threshold for slow queries in milliseconds
 	// +kubebuilder:default=1000
@@ -158,7 +161,7 @@ type SqliteConfig struct {
 	// WriteAheadLog enables WAL mode
 	// +kubebuilder:default=true
 	// +optional
-	WriteAheadLog bool `json:"write_ahead_log,omitempty"`
+	WriteAheadLog *bool `json:"write_ahead_log,omitempty"`
 
 	// WALAutocheckpoint sets the WAL autocheckpoint value
 	// +kubebuilder:default=1000
@@ -206,7 +209,7 @@ type PostgresConfig struct {
 	// SSL indicates whether to use SSL
 	// +kubebuilder:default=false
 	// +optional
-	SSL bool `json:"ssl,omitempty"`
+	SSL *bool `json:"ssl,omitempty"`
 }
 
 // DatabaseConfig represents database configuration
@@ -220,19 +223,19 @@ type DatabaseConfig struct {
 	// Debug enables debug mode
 	// +kubebuilder:default=false
 	// +optional
-	Debug bool `json:"debug,omitempty"`
+	Debug *bool `json:"debug,omitempty"`
 
 	// Gorm configuration
 	// +optional
-	Gorm GormConfig `json:"gorm,omitempty"`
+	Gorm GormConfig `json:"gorm"`
 
 	// Sqlite configuration
 	// +optional
-	Sqlite SqliteConfig `json:"sqlite,omitempty"`
+	Sqlite SqliteConfig `json:"sqlite"`
 
 	// Postgres configuration
 	// +optional
-	Postgres PostgresConfig `json:"postgres,omitempty"`
+	Postgres PostgresConfig `json:"postgres"`
 }
 
 // TLSConfig represents TLS configuration
@@ -326,7 +329,7 @@ type DNSConfig struct {
 	// MagicDNS enables MagicDNS
 	// +kubebuilder:default=true
 	// +optional
-	MagicDNS bool `json:"magic_dns,omitempty"`
+	MagicDNS *bool `json:"magic_dns,omitempty"`
 
 	// BaseDomain is the base domain for MagicDNS
 	// +optional
@@ -335,11 +338,11 @@ type DNSConfig struct {
 	// OverrideLocalDNS overrides local DNS settings
 	// +kubebuilder:default=true
 	// +optional
-	OverrideLocalDNS bool `json:"override_local_dns,omitempty"`
+	OverrideLocalDNS *bool `json:"override_local_dns,omitempty"`
 
 	// Nameservers configuration
 	// +optional
-	Nameservers DNSNameserversConfig `json:"nameservers,omitempty"`
+	Nameservers DNSNameserversConfig `json:"nameservers"`
 
 	// SearchDomains is the list of search domains
 	// +optional
@@ -355,7 +358,7 @@ type PKCEConfig struct {
 	// Enabled indicates if PKCE is enabled
 	// +kubebuilder:default=false
 	// +optional
-	Enabled bool `json:"enabled,omitempty"`
+	Enabled *bool `json:"enabled,omitempty"`
 
 	// Method is the PKCE method
 	// +kubebuilder:validation:Enum=plain;S256
@@ -369,7 +372,7 @@ type OIDCConfig struct {
 	// OnlyStartIfOIDCIsAvailable blocks startup until OIDC is available
 	// +kubebuilder:default=true
 	// +optional
-	OnlyStartIfOIDCIsAvailable bool `json:"only_start_if_oidc_is_available,omitempty"`
+	OnlyStartIfOIDCIsAvailable *bool `json:"only_start_if_oidc_is_available,omitempty"`
 
 	// Issuer is the OIDC issuer URL
 	// +optional
@@ -395,7 +398,7 @@ type OIDCConfig struct {
 	// UseExpiryFromToken uses the token expiry
 	// +kubebuilder:default=false
 	// +optional
-	UseExpiryFromToken bool `json:"use_expiry_from_token,omitempty"`
+	UseExpiryFromToken *bool `json:"use_expiry_from_token,omitempty"`
 
 	// Scope is the list of OIDC scopes
 	// +optional
@@ -419,7 +422,7 @@ type OIDCConfig struct {
 
 	// PKCE configuration
 	// +optional
-	PKCE PKCEConfig `json:"pkce,omitempty"`
+	PKCE PKCEConfig `json:"pkce"`
 }
 
 // LogTailConfig represents Logtail configuration
@@ -427,7 +430,7 @@ type LogTailConfig struct {
 	// Enabled indicates if Logtail is enabled
 	// +kubebuilder:default=false
 	// +optional
-	Enabled bool `json:"enabled,omitempty"`
+	Enabled *bool `json:"enabled,omitempty"`
 }
 
 // HeadscaleConfig represents the complete Headscale configuration
@@ -454,24 +457,24 @@ type HeadscaleConfig struct {
 	// GRPCAllowInsecure allows insecure gRPC
 	// +kubebuilder:default=false
 	// +optional
-	GRPCAllowInsecure bool `json:"grpc_allow_insecure,omitempty"`
+	GRPCAllowInsecure *bool `json:"grpc_allow_insecure,omitempty"`
 
 	// Noise configuration
 	// +optional
-	Noise NoiseConfig `json:"noise,omitempty"`
+	Noise NoiseConfig `json:"noise"`
 
 	// Prefixes configuration
 	// +optional
-	Prefixes PrefixesConfig `json:"prefixes,omitempty"`
+	Prefixes PrefixesConfig `json:"prefixes"`
 
 	// DERP configuration
 	// +optional
-	DERP DERPConfig `json:"derp,omitempty"`
+	DERP DERPConfig `json:"derp"`
 
 	// DisableCheckUpdates disables update checks
 	// +kubebuilder:default=false
 	// +optional
-	DisableCheckUpdates bool `json:"disable_check_updates,omitempty"`
+	DisableCheckUpdates *bool `json:"disable_check_updates,omitempty"`
 
 	// EphemeralNodeInactivityTimeout is the timeout for ephemeral nodes
 	// +kubebuilder:default="30m"
@@ -480,7 +483,7 @@ type HeadscaleConfig struct {
 
 	// Database configuration
 	// +optional
-	Database DatabaseConfig `json:"database,omitempty"`
+	Database DatabaseConfig `json:"database"`
 
 	// ACMEURL is the ACME directory URL
 	// +kubebuilder:default="https://acme-v02.api.letsencrypt.org/directory"
@@ -521,15 +524,15 @@ type HeadscaleConfig struct {
 
 	// Log configuration
 	// +optional
-	Log LogConfig `json:"log,omitempty"`
+	Log LogConfig `json:"log"`
 
 	// Policy configuration
 	// +optional
-	Policy PolicyConfig `json:"policy,omitempty"`
+	Policy PolicyConfig `json:"policy"`
 
 	// DNS configuration
 	// +optional
-	DNS DNSConfig `json:"dns,omitempty"`
+	DNS DNSConfig `json:"dns"`
 
 	// UnixSocket is the path to the Unix socket
 	// +kubebuilder:default="/var/run/headscale/headscale.sock"
@@ -543,16 +546,16 @@ type HeadscaleConfig struct {
 
 	// OIDC configuration
 	// +optional
-	OIDC OIDCConfig `json:"oidc,omitempty"`
+	OIDC OIDCConfig `json:"oidc"`
 
 	// LogTail configuration
 	// +optional
-	LogTail LogTailConfig `json:"logtail,omitempty"`
+	LogTail LogTailConfig `json:"logtail"`
 
 	// RandomizeClientPort randomizes the WireGuard client port
 	// +kubebuilder:default=false
 	// +optional
-	RandomizeClientPort bool `json:"randomize_client_port,omitempty"`
+	RandomizeClientPort *bool `json:"randomize_client_port,omitempty"`
 }
 
 // HeadscaleSpec defines the desired state of Headscale
@@ -563,13 +566,13 @@ type HeadscaleSpec struct {
 	Version string `json:"version"`
 
 	// Replicas indicates the number of Headscale instances to deploy.
-	// +kubebuilder:validation:Minimum=1
+	// +kubebuilder:validation:Minimum=0
 	// +required
 	Replicas int32 `json:"replicas"`
 
 	// Config holds custom configuration for Headscale.
 	// +optional
-	Config HeadscaleConfig `json:"config,omitempty"`
+	Config HeadscaleConfig `json:"config"`
 }
 
 // HeadscaleStatus defines the observed state of Headscale.
