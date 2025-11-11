@@ -578,6 +578,12 @@ type HeadscaleSpec struct {
 	// +required
 	Version string `json:"version"`
 
+	// Image is the container image to use for Headscale.
+	// +kubebuilder:default="headscale/headscale"
+	// +kubebuilder:validation:MinLength=1
+	// +optional
+	Image string `json:"image,omitempty"`
+
 	// Replicas indicates the number of Headscale instances to deploy.
 	// +kubebuilder:validation:Minimum=0
 	// +required

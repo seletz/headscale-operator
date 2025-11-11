@@ -491,6 +491,11 @@ spec:
                 required:
                 - server_url
                 type: object
+              image:
+                default: headscale/headscale
+                description: Image is the container image to use for Headscale.
+                minLength: 1
+                type: string
               persistent_volume_claim:
                 description: PersistentVolumeClaim configuration for data storage
                 properties:

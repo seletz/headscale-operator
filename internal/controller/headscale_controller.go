@@ -301,7 +301,7 @@ func (r *HeadscaleReconciler) statefulSetForHeadscale(h *headscalev1beta1.Headsc
 	replicas := h.Spec.Replicas
 
 	// Determine the image to use
-	image := fmt.Sprintf("headscale/headscale:%s", h.Spec.Version)
+	image := fmt.Sprintf("%s:%s", h.Spec.Image, h.Spec.Version)
 
 	// Extract ports from configuration
 	httpPort := extractPort(h.Spec.Config.ListenAddr, 8080)
