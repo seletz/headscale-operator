@@ -65,33 +65,19 @@ metadata:
   name: headscale-sample
   namespace: headscale
 spec:
-  version: "0.23.0"
+  version: "v0.27.0"
   replicas: 1
-  ingressHostname: headscale.example.com
   config:
-    server_url: https://headscale.example.com
-    listen_addr: 0.0.0.0:8080
-    metrics_listen_addr: 127.0.0.1:9090
-    grpc_listen_addr: 127.0.0.1:50443
-    
-    prefixes:
-      v4: 100.64.0.0/10
-      v6: fd7a:115c:a1e0::/48
-      allocation: sequential
-    
+    server_url: http://vpn.headscale.local
+    grpc_allow_insecure: true
+    derp:
+      server:
+        enabled: false    
+    disable_check_updates: false
     database:
       type: sqlite
-      sqlite:
-        path: /var/lib/headscale/db.sqlite
-        write_ahead_log: true
-    
     dns:
-      magic_dns: true
-      base_domain: example.com
-      nameservers:
-        global:
-          - 1.1.1.1
-          - 1.0.0.1
+      magic_dns: false
 ```
 
 Apply the configuration:
