@@ -308,6 +308,25 @@ func (r *HeadscaleReconciler) statefulSetForHeadscale(h *headscalev1beta1.Headsc
 	metricsPort := extractPort(h.Spec.Config.MetricsListenAddr, 9090)
 	grpcPort := extractPort(h.Spec.Config.GRPCListenAddr, 50443)
 
+	// Get PVC configuration with defaults
+	pvcSize := resource.NewQuantity(128*1024*1024, resource.BinarySI) // 128Mi default
+	if h.Spec.PersistentVolumeClaim.Size != nil {
+		pvcSize = h.Spec.PersistentVolumeClaim.Size
+	}
+
+	// Build PVC spec
+	pvcSpec := corev1.PersistentVolumeClaimSpec{
+		AccessModes: []corev1.PersistentVolumeAccessMode{
+			corev1.ReadWriteOnce,
+		},
+		Resources: corev1.VolumeResourceRequirements{
+			Requests: corev1.ResourceList{
+				corev1.ResourceStorage: *pvcSize,
+			},
+		},
+		StorageClassName: h.Spec.PersistentVolumeClaim.StorageClassName,
+	}
+
 	return &appsv1.StatefulSet{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      statefulSetName,
@@ -402,16 +421,7 @@ func (r *HeadscaleReconciler) statefulSetForHeadscale(h *headscalev1beta1.Headsc
 					ObjectMeta: metav1.ObjectMeta{
 						Name: "data",
 					},
-					Spec: corev1.PersistentVolumeClaimSpec{
-						AccessModes: []corev1.PersistentVolumeAccessMode{
-							corev1.ReadWriteOnce,
-						},
-						Resources: corev1.VolumeResourceRequirements{
-							Requests: corev1.ResourceList{
-								corev1.ResourceStorage: resource.MustParse("128Mi"),
-							},
-						},
-					},
+					Spec: pvcSpec,
 				},
 			},
 		},

@@ -17,6 +17,7 @@ limitations under the License.
 package v1beta1
 
 import (
+	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -433,6 +434,18 @@ type LogTailConfig struct {
 	Enabled *bool `json:"enabled,omitempty"`
 }
 
+// PersistentVolumeClaimConfig represents the PVC configuration for Headscale data storage
+type PersistentVolumeClaimConfig struct {
+	// Size is the storage size for the PVC
+	// +kubebuilder:default="128Mi"
+	// +optional
+	Size *resource.Quantity `json:"size,omitempty"`
+
+	// StorageClassName is the storage class name for the PVC
+	// +optional
+	StorageClassName *string `json:"storage_class_name,omitempty"`
+}
+
 // HeadscaleConfig represents the complete Headscale configuration
 type HeadscaleConfig struct {
 	// ServerURL is the URL clients will connect to
@@ -573,6 +586,10 @@ type HeadscaleSpec struct {
 	// Config holds custom configuration for Headscale.
 	// +optional
 	Config HeadscaleConfig `json:"config"`
+
+	// PersistentVolumeClaim configuration for data storage
+	// +optional
+	PersistentVolumeClaim PersistentVolumeClaimConfig `json:"persistent_volume_claim"`
 }
 
 // HeadscaleStatus defines the observed state of Headscale.
