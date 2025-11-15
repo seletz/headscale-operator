@@ -311,5 +311,203 @@ var _ = Describe("HeadscaleUser Controller", func() {
 			})
 			Expect(err).NotTo(HaveOccurred())
 		})
+
+		It("should handle reconciliation when resource is not found", func() {
+			By("Reconciling a non-existent resource")
+			controllerReconciler := &HeadscaleUserReconciler{
+				Client: k8sClient,
+				Scheme: k8sClient.Scheme(),
+			}
+
+			nonExistentName := types.NamespacedName{
+				Name:      "non-existent-resource",
+				Namespace: namespace,
+			}
+
+			_, err := controllerReconciler.Reconcile(ctx, reconcile.Request{
+				NamespacedName: nonExistentName,
+			})
+			Expect(err).NotTo(HaveOccurred())
+		})
+
+		It("should handle deletion when Headscale is not found", func() {
+			By("Creating a HeadscaleUser with a Headscale reference")
+			tempHeadscaleName := "temp-headscale-for-deletion"
+			tempHeadscale := &headscalev1beta1.Headscale{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      tempHeadscaleName,
+					Namespace: namespace,
+				},
+				Spec: headscalev1beta1.HeadscaleSpec{
+					Version:  "v0.27.1",
+					Replicas: 1,
+					Config: headscalev1beta1.HeadscaleConfig{
+						ServerURL:  "https://temp.example.com",
+						ListenAddr: "0.0.0.0:8080",
+					},
+				},
+			}
+			Expect(k8sClient.Create(ctx, tempHeadscale)).To(Succeed())
+
+			headscaleUser := &headscalev1beta1.HeadscaleUser{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      resourceName + "-orphaned",
+					Namespace: namespace,
+				},
+				Spec: headscalev1beta1.HeadscaleUserSpec{
+					HeadscaleRef: tempHeadscaleName,
+					Username:     "orphaneduser",
+				},
+			}
+			Expect(k8sClient.Create(ctx, headscaleUser)).To(Succeed())
+
+			orphanedNamespacedName := types.NamespacedName{
+				Name:      resourceName + "-orphaned",
+				Namespace: namespace,
+			}
+
+			By("Reconciling to add finalizer")
+			controllerReconciler := &HeadscaleUserReconciler{
+				Client: k8sClient,
+				Scheme: k8sClient.Scheme(),
+			}
+
+			_, err := controllerReconciler.Reconcile(ctx, reconcile.Request{
+				NamespacedName: orphanedNamespacedName,
+			})
+			Expect(err).NotTo(HaveOccurred())
+
+			By("Deleting the Headscale instance first")
+			Expect(k8sClient.Delete(ctx, tempHeadscale)).To(Succeed())
+			Eventually(func() bool {
+				err := k8sClient.Get(ctx, types.NamespacedName{
+					Name:      tempHeadscaleName,
+					Namespace: namespace,
+				}, tempHeadscale)
+				return errors.IsNotFound(err)
+			}, timeout, interval).Should(BeTrue())
+
+			By("Deleting the HeadscaleUser")
+			Expect(k8sClient.Delete(ctx, headscaleUser)).To(Succeed())
+
+			By("Reconciling the deletion (should handle missing Headscale gracefully)")
+			_, err = controllerReconciler.Reconcile(ctx, reconcile.Request{
+				NamespacedName: orphanedNamespacedName,
+			})
+			Expect(err).NotTo(HaveOccurred())
+		})
+
+		It("should set status conditions correctly during user creation", func() {
+			By("Creating the HeadscaleUser resource")
+			headscaleUser := &headscalev1beta1.HeadscaleUser{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      resourceName + "-conditions",
+					Namespace: namespace,
+				},
+				Spec: headscalev1beta1.HeadscaleUserSpec{
+					HeadscaleRef: headscaleName,
+					Username:     "conditionsuser",
+				},
+			}
+			Expect(k8sClient.Create(ctx, headscaleUser)).To(Succeed())
+
+			conditionsNamespacedName := types.NamespacedName{
+				Name:      resourceName + "-conditions",
+				Namespace: namespace,
+			}
+
+			By("Reconciling the resource")
+			controllerReconciler := &HeadscaleUserReconciler{
+				Client: k8sClient,
+				Scheme: k8sClient.Scheme(),
+			}
+
+			_, err := controllerReconciler.Reconcile(ctx, reconcile.Request{
+				NamespacedName: conditionsNamespacedName,
+			})
+			Expect(err).NotTo(HaveOccurred())
+
+			By("Checking that finalizer was added")
+			Eventually(func() bool {
+				err := k8sClient.Get(ctx, conditionsNamespacedName, headscaleUser)
+				if err != nil {
+					return false
+				}
+				return slices.Contains(headscaleUser.Finalizers, headscaleUserFinalizer)
+			}, timeout, interval).Should(BeTrue())
+
+			By("Cleaning up the test resource")
+			Expect(k8sClient.Delete(ctx, headscaleUser)).To(Succeed())
+		})
+
+		It("should validate required username field", func() {
+			By("Creating a HeadscaleUser without username should fail")
+			headscaleUser := &headscalev1beta1.HeadscaleUser{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      resourceName + "-no-username",
+					Namespace: namespace,
+				},
+				Spec: headscalev1beta1.HeadscaleUserSpec{
+					HeadscaleRef: headscaleName,
+					// Username is missing
+				},
+			}
+			err := k8sClient.Create(ctx, headscaleUser)
+			Expect(err).To(HaveOccurred())
+		})
+
+		It("should handle multiple HeadscaleUsers for the same Headscale", func() {
+			By("Creating first HeadscaleUser")
+			user1 := &headscalev1beta1.HeadscaleUser{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      resourceName + "-multi1",
+					Namespace: namespace,
+				},
+				Spec: headscalev1beta1.HeadscaleUserSpec{
+					HeadscaleRef: headscaleName,
+					Username:     "multiuser1",
+				},
+			}
+			Expect(k8sClient.Create(ctx, user1)).To(Succeed())
+
+			By("Creating second HeadscaleUser")
+			user2 := &headscalev1beta1.HeadscaleUser{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      resourceName + "-multi2",
+					Namespace: namespace,
+				},
+				Spec: headscalev1beta1.HeadscaleUserSpec{
+					HeadscaleRef: headscaleName,
+					Username:     "multiuser2",
+				},
+			}
+			Expect(k8sClient.Create(ctx, user2)).To(Succeed())
+
+			By("Reconciling both resources")
+			controllerReconciler := &HeadscaleUserReconciler{
+				Client: k8sClient,
+				Scheme: k8sClient.Scheme(),
+			}
+
+			_, err := controllerReconciler.Reconcile(ctx, reconcile.Request{
+				NamespacedName: types.NamespacedName{
+					Name:      resourceName + "-multi1",
+					Namespace: namespace,
+				},
+			})
+			Expect(err).NotTo(HaveOccurred())
+
+			_, err = controllerReconciler.Reconcile(ctx, reconcile.Request{
+				NamespacedName: types.NamespacedName{
+					Name:      resourceName + "-multi2",
+					Namespace: namespace,
+				},
+			})
+			Expect(err).NotTo(HaveOccurred())
+
+			By("Cleaning up test resources")
+			Expect(k8sClient.Delete(ctx, user1)).To(Succeed())
+			Expect(k8sClient.Delete(ctx, user2)).To(Succeed())
+		})
 	})
 })

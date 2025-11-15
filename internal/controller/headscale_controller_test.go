@@ -18,62 +18,107 @@ package controller
 
 import (
 	"context"
+	"slices"
+	"time"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	"k8s.io/apimachinery/pkg/api/errors"
+	appsv1 "k8s.io/api/apps/v1"
+	corev1 "k8s.io/api/core/v1"
+	rbacv1 "k8s.io/api/rbac/v1"
+	"k8s.io/apimachinery/pkg/api/resource"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
-
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	headscalev1beta1 "github.com/infradohq/headscale-operator/api/v1beta1"
 )
 
 var _ = Describe("Headscale Controller", func() {
-	Context("When reconciling a resource", func() {
-		const resourceName = "test-resource"
+	Context("When reconciling a Headscale resource", func() {
+		const (
+			resourceName       = "test-headscale"
+			namespace          = "default"
+			readyConditionType = "Ready"
+			timeout            = time.Second * 10
+			interval           = time.Millisecond * 250
+		)
 
 		ctx := context.Background()
 
 		typeNamespacedName := types.NamespacedName{
 			Name:      resourceName,
-			Namespace: "default", // TODO(user):Modify as needed
+			Namespace: namespace,
 		}
-		headscale := &headscalev1beta1.Headscale{}
-
-		BeforeEach(func() {
-			By("creating the custom resource for the Kind Headscale")
-			err := k8sClient.Get(ctx, typeNamespacedName, headscale)
-			if err != nil && errors.IsNotFound(err) {
-				resource := &headscalev1beta1.Headscale{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:      resourceName,
-						Namespace: "default",
-					},
-					Spec: headscalev1beta1.HeadscaleSpec{
-						Version:  "0.23.0",
-						Replicas: 1,
-						Config: headscalev1beta1.HeadscaleConfig{
-							ServerURL:  "http://127.0.0.1:8080",
-							ListenAddr: "127.0.0.1:8080",
-						},
-					},
-				}
-				Expect(k8sClient.Create(ctx, resource)).To(Succeed())
-			}
-		})
 
 		AfterEach(func() {
-			// TODO(user): Cleanup logic after each test, like removing the resource instance.
-			resource := &headscalev1beta1.Headscale{}
-			err := k8sClient.Get(ctx, typeNamespacedName, resource)
-			Expect(err).NotTo(HaveOccurred())
+			By("Cleaning up all test resources with various suffixes")
+			suffixes := []string{"", "-automanage", "-no-automanage", "-update", "-deletion", "-replicas", "-pvc", "-security"}
 
-			By("Cleanup the specific resource instance Headscale")
-			Expect(k8sClient.Delete(ctx, resource)).To(Succeed())
+			for _, suffix := range suffixes {
+				resourceName := types.NamespacedName{
+					Name:      "test-headscale" + suffix,
+					Namespace: namespace,
+				}
+
+				headscale := &headscalev1beta1.Headscale{}
+				err := k8sClient.Get(ctx, resourceName, headscale)
+				if err == nil {
+					_ = k8sClient.Delete(ctx, headscale)
+				}
+			}
+
+			By("Cleaning up shared StatefulSet")
+			statefulSet := &appsv1.StatefulSet{}
+			statefulSetName := types.NamespacedName{
+				Name:      "headscale",
+				Namespace: namespace,
+			}
+			err := k8sClient.Get(ctx, statefulSetName, statefulSet)
+			if err == nil {
+				_ = k8sClient.Delete(ctx, statefulSet)
+			}
+
+			By("Waiting for all resources to be cleaned up")
+			Eventually(func() bool {
+				err := k8sClient.Get(ctx, statefulSetName, statefulSet)
+				return err != nil
+			}, timeout, interval).Should(BeTrue())
 		})
-		It("should successfully reconcile the resource", func() {
+
+		It("should successfully create and reconcile a Headscale instance", func() {
+			By("Creating the Headscale resource")
+			headscale := &headscalev1beta1.Headscale{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      resourceName,
+					Namespace: namespace,
+				},
+				Spec: headscalev1beta1.HeadscaleSpec{
+					Version:  "v0.27.1",
+					Replicas: 1,
+					Config: headscalev1beta1.HeadscaleConfig{
+						ServerURL:         "https://headscale.example.com",
+						ListenAddr:        "0.0.0.0:8080",
+						GRPCListenAddr:    "0.0.0.0:50443",
+						MetricsListenAddr: "0.0.0.0:9090",
+					},
+					PersistentVolumeClaim: headscalev1beta1.PersistentVolumeClaimConfig{
+						Size: resource.NewQuantity(128*1024*1024, resource.BinarySI),
+					},
+					APIKey: headscalev1beta1.APIKeyConfig{
+						SecretName: "test-api-key",
+					},
+				},
+			}
+			Expect(k8sClient.Create(ctx, headscale)).To(Succeed())
+
+			By("Checking that the Headscale was created")
+			createdHeadscale := &headscalev1beta1.Headscale{}
+			Eventually(func() bool {
+				err := k8sClient.Get(ctx, typeNamespacedName, createdHeadscale)
+				return err == nil
+			}, timeout, interval).Should(BeTrue())
+
 			By("Reconciling the created resource")
 			controllerReconciler := &HeadscaleReconciler{
 				Client: k8sClient,
@@ -84,8 +129,592 @@ var _ = Describe("Headscale Controller", func() {
 				NamespacedName: typeNamespacedName,
 			})
 			Expect(err).NotTo(HaveOccurred())
-			// TODO(user): Add more specific assertions depending on your controller's reconciliation logic.
-			// Example: If you expect a certain status condition after reconciliation, verify it here.
+
+			By("Checking that the finalizer was added")
+			Eventually(func() bool {
+				err := k8sClient.Get(ctx, typeNamespacedName, createdHeadscale)
+				if err != nil {
+					return false
+				}
+				return slices.Contains(createdHeadscale.Finalizers, headscaleFinalizer)
+			}, timeout, interval).Should(BeTrue())
+
+			By("Verifying ConfigMap was created")
+			configMap := &corev1.ConfigMap{}
+			Eventually(func() bool {
+				err := k8sClient.Get(ctx, types.NamespacedName{
+					Name:      configMapName,
+					Namespace: namespace,
+				}, configMap)
+				return err == nil
+			}, timeout, interval).Should(BeTrue())
+
+			By("Verifying StatefulSet was created")
+			statefulSet := &appsv1.StatefulSet{}
+			Eventually(func() bool {
+				err := k8sClient.Get(ctx, types.NamespacedName{
+					Name:      statefulSetName,
+					Namespace: namespace,
+				}, statefulSet)
+				return err == nil
+			}, timeout, interval).Should(BeTrue())
+
+			By("Verifying Service was created")
+			service := &corev1.Service{}
+			Eventually(func() bool {
+				err := k8sClient.Get(ctx, types.NamespacedName{
+					Name:      serviceName,
+					Namespace: namespace,
+				}, service)
+				return err == nil
+			}, timeout, interval).Should(BeTrue())
+
+			By("Verifying Metrics Service was created")
+			metricsService := &corev1.Service{}
+			Eventually(func() bool {
+				err := k8sClient.Get(ctx, types.NamespacedName{
+					Name:      metricsServiceName,
+					Namespace: namespace,
+				}, metricsService)
+				return err == nil
+			}, timeout, interval).Should(BeTrue())
+
+			By("Verifying ServiceAccount was created")
+			serviceAccount := &corev1.ServiceAccount{}
+			Eventually(func() bool {
+				err := k8sClient.Get(ctx, types.NamespacedName{
+					Name:      serviceAccountName,
+					Namespace: namespace,
+				}, serviceAccount)
+				return err == nil
+			}, timeout, interval).Should(BeTrue())
+
+			By("Verifying Role was created")
+			role := &rbacv1.Role{}
+			Eventually(func() bool {
+				err := k8sClient.Get(ctx, types.NamespacedName{
+					Name:      roleName,
+					Namespace: namespace,
+				}, role)
+				return err == nil
+			}, timeout, interval).Should(BeTrue())
+
+			By("Verifying RoleBinding was created")
+			roleBinding := &rbacv1.RoleBinding{}
+			Eventually(func() bool {
+				err := k8sClient.Get(ctx, types.NamespacedName{
+					Name:      roleBindingName,
+					Namespace: namespace,
+				}, roleBinding)
+				return err == nil
+			}, timeout, interval).Should(BeTrue())
+
+			By("Verifying status condition was set")
+			Eventually(func() bool {
+				err := k8sClient.Get(ctx, typeNamespacedName, createdHeadscale)
+				if err != nil {
+					return false
+				}
+				for _, condition := range createdHeadscale.Status.Conditions {
+					if condition.Type == "Ready" && condition.Status == metav1.ConditionTrue {
+						return true
+					}
+				}
+				return false
+			}, timeout, interval).Should(BeTrue())
+		})
+
+		It("should create StatefulSet with API key manager sidecar when AutoManage is true", func() {
+			By("Creating the Headscale resource with AutoManage enabled")
+			autoManage := true
+			headscale := &headscalev1beta1.Headscale{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      resourceName + "-automanage",
+					Namespace: namespace,
+				},
+				Spec: headscalev1beta1.HeadscaleSpec{
+					Version:  "v0.27.1",
+					Replicas: 1,
+					Config: headscalev1beta1.HeadscaleConfig{
+						ServerURL:  "https://headscale.example.com",
+						ListenAddr: "0.0.0.0:8080",
+					},
+					APIKey: headscalev1beta1.APIKeyConfig{
+						AutoManage: &autoManage,
+						SecretName: "test-api-key-automanage",
+					},
+				},
+			}
+			Expect(k8sClient.Create(ctx, headscale)).To(Succeed())
+
+			autoManageNamespacedName := types.NamespacedName{
+				Name:      resourceName + "-automanage",
+				Namespace: namespace,
+			}
+
+			By("Reconciling the resource")
+			controllerReconciler := &HeadscaleReconciler{
+				Client: k8sClient,
+				Scheme: k8sClient.Scheme(),
+			}
+
+			_, err := controllerReconciler.Reconcile(ctx, reconcile.Request{
+				NamespacedName: autoManageNamespacedName,
+			})
+			Expect(err).NotTo(HaveOccurred())
+
+			By("Verifying StatefulSet has apikey-manager container")
+			statefulSet := &appsv1.StatefulSet{}
+			Eventually(func() bool {
+				err := k8sClient.Get(ctx, types.NamespacedName{
+					Name:      statefulSetName,
+					Namespace: namespace,
+				}, statefulSet)
+				if err != nil {
+					return false
+				}
+				for _, container := range statefulSet.Spec.Template.Spec.Containers {
+					if container.Name == "apikey-manager" {
+						return true
+					}
+				}
+				return false
+			}, timeout, interval).Should(BeTrue())
+
+			By("Cleaning up the test resource")
+			Expect(k8sClient.Delete(ctx, headscale)).To(Succeed())
+		})
+
+		It("should not create RBAC resources when AutoManage is false", func() {
+			By("Creating the Headscale resource with AutoManage disabled")
+			autoManage := false
+			headscale := &headscalev1beta1.Headscale{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      resourceName + "-no-automanage",
+					Namespace: namespace,
+				},
+				Spec: headscalev1beta1.HeadscaleSpec{
+					Version:  "v0.27.1",
+					Replicas: 1,
+					Config: headscalev1beta1.HeadscaleConfig{
+						ServerURL:  "https://headscale.example.com",
+						ListenAddr: "0.0.0.0:8080",
+					},
+					APIKey: headscalev1beta1.APIKeyConfig{
+						AutoManage: &autoManage,
+						SecretName: "test-api-key-no-automanage",
+					},
+				},
+			}
+			Expect(k8sClient.Create(ctx, headscale)).To(Succeed())
+
+			noAutoManageNamespacedName := types.NamespacedName{
+				Name:      resourceName + "-no-automanage",
+				Namespace: namespace,
+			}
+
+			By("Reconciling the resource")
+			controllerReconciler := &HeadscaleReconciler{
+				Client: k8sClient,
+				Scheme: k8sClient.Scheme(),
+			}
+
+			_, err := controllerReconciler.Reconcile(ctx, reconcile.Request{
+				NamespacedName: noAutoManageNamespacedName,
+			})
+			Expect(err).NotTo(HaveOccurred())
+
+			By("Verifying StatefulSet does not have apikey-manager container")
+			statefulSet := &appsv1.StatefulSet{}
+			Eventually(func() bool {
+				err := k8sClient.Get(ctx, types.NamespacedName{
+					Name:      statefulSetName,
+					Namespace: namespace,
+				}, statefulSet)
+				if err != nil {
+					return false
+				}
+				for _, container := range statefulSet.Spec.Template.Spec.Containers {
+					if container.Name == "apikey-manager" {
+						return true
+					}
+				}
+				return false
+			}, timeout, interval).Should(BeFalse())
+
+			By("Cleaning up the test resource")
+			Expect(k8sClient.Delete(ctx, headscale)).To(Succeed())
+		})
+
+		It("should update ConfigMap when config changes", func() {
+			By("Creating the Headscale resource")
+			headscale := &headscalev1beta1.Headscale{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      resourceName + "-update",
+					Namespace: namespace,
+				},
+				Spec: headscalev1beta1.HeadscaleSpec{
+					Version:  "v0.27.1",
+					Replicas: 1,
+					Config: headscalev1beta1.HeadscaleConfig{
+						ServerURL:  "https://headscale.example.com",
+						ListenAddr: "0.0.0.0:8080",
+					},
+				},
+			}
+			Expect(k8sClient.Create(ctx, headscale)).To(Succeed())
+
+			updateNamespacedName := types.NamespacedName{
+				Name:      resourceName + "-update",
+				Namespace: namespace,
+			}
+
+			By("Reconciling the resource")
+			controllerReconciler := &HeadscaleReconciler{
+				Client: k8sClient,
+				Scheme: k8sClient.Scheme(),
+			}
+
+			_, err := controllerReconciler.Reconcile(ctx, reconcile.Request{
+				NamespacedName: updateNamespacedName,
+			})
+			Expect(err).NotTo(HaveOccurred())
+
+			By("Getting the initial ConfigMap")
+			configMap := &corev1.ConfigMap{}
+			Eventually(func() bool {
+				err := k8sClient.Get(ctx, types.NamespacedName{
+					Name:      configMapName,
+					Namespace: namespace,
+				}, configMap)
+				return err == nil
+			}, timeout, interval).Should(BeTrue())
+
+			initialData := configMap.Data["config.yaml"]
+
+			By("Updating the Headscale config")
+			Eventually(func() error {
+				err := k8sClient.Get(ctx, updateNamespacedName, headscale)
+				if err != nil {
+					return err
+				}
+				headscale.Spec.Config.ServerURL = "https://new-headscale.example.com"
+				return k8sClient.Update(ctx, headscale)
+			}, timeout, interval).Should(Succeed())
+
+			By("Reconciling again")
+			_, err = controllerReconciler.Reconcile(ctx, reconcile.Request{
+				NamespacedName: updateNamespacedName,
+			})
+			Expect(err).NotTo(HaveOccurred())
+
+			By("Verifying ConfigMap was updated")
+			Eventually(func() bool {
+				err := k8sClient.Get(ctx, types.NamespacedName{
+					Name:      configMapName,
+					Namespace: namespace,
+				}, configMap)
+				if err != nil {
+					return false
+				}
+				return configMap.Data["config.yaml"] != initialData
+			}, timeout, interval).Should(BeTrue())
+
+			By("Cleaning up the test resource")
+			Expect(k8sClient.Delete(ctx, headscale)).To(Succeed())
+		})
+
+		It("should handle deletion with finalizer", func() {
+			By("Creating the Headscale resource")
+			headscale := &headscalev1beta1.Headscale{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      resourceName + "-deletion",
+					Namespace: namespace,
+				},
+				Spec: headscalev1beta1.HeadscaleSpec{
+					Version:  "v0.27.1",
+					Replicas: 1,
+					Config: headscalev1beta1.HeadscaleConfig{
+						ServerURL:  "https://headscale.example.com",
+						ListenAddr: "0.0.0.0:8080",
+					},
+				},
+			}
+			Expect(k8sClient.Create(ctx, headscale)).To(Succeed())
+
+			deletionNamespacedName := types.NamespacedName{
+				Name:      resourceName + "-deletion",
+				Namespace: namespace,
+			}
+
+			By("Reconciling to add finalizer")
+			controllerReconciler := &HeadscaleReconciler{
+				Client: k8sClient,
+				Scheme: k8sClient.Scheme(),
+			}
+
+			_, err := controllerReconciler.Reconcile(ctx, reconcile.Request{
+				NamespacedName: deletionNamespacedName,
+			})
+			Expect(err).NotTo(HaveOccurred())
+
+			By("Verifying finalizer was added")
+			Eventually(func() bool {
+				err := k8sClient.Get(ctx, deletionNamespacedName, headscale)
+				if err != nil {
+					return false
+				}
+				return slices.Contains(headscale.Finalizers, headscaleFinalizer)
+			}, timeout, interval).Should(BeTrue())
+
+			By("Deleting the Headscale")
+			Expect(k8sClient.Delete(ctx, headscale)).To(Succeed())
+
+			By("Reconciling the deletion")
+			_, err = controllerReconciler.Reconcile(ctx, reconcile.Request{
+				NamespacedName: deletionNamespacedName,
+			})
+			Expect(err).NotTo(HaveOccurred())
+		})
+
+		It("should handle reconciliation when resource is not found", func() {
+			By("Reconciling a non-existent resource")
+			controllerReconciler := &HeadscaleReconciler{
+				Client: k8sClient,
+				Scheme: k8sClient.Scheme(),
+			}
+
+			nonExistentName := types.NamespacedName{
+				Name:      "non-existent-resource",
+				Namespace: namespace,
+			}
+
+			_, err := controllerReconciler.Reconcile(ctx, reconcile.Request{
+				NamespacedName: nonExistentName,
+			})
+			Expect(err).NotTo(HaveOccurred())
+		})
+
+		It("should set correct replicas in StatefulSet", func() {
+			By("Creating the Headscale resource with custom replicas")
+			headscale := &headscalev1beta1.Headscale{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      resourceName + "-replicas",
+					Namespace: namespace,
+				},
+				Spec: headscalev1beta1.HeadscaleSpec{
+					Version:  "v0.27.1",
+					Replicas: 3,
+					Config: headscalev1beta1.HeadscaleConfig{
+						ServerURL:  "https://headscale.example.com",
+						ListenAddr: "0.0.0.0:8080",
+					},
+				},
+			}
+			Expect(k8sClient.Create(ctx, headscale)).To(Succeed())
+
+			replicasNamespacedName := types.NamespacedName{
+				Name:      resourceName + "-replicas",
+				Namespace: namespace,
+			}
+
+			By("Reconciling the resource")
+			controllerReconciler := &HeadscaleReconciler{
+				Client: k8sClient,
+				Scheme: k8sClient.Scheme(),
+			}
+
+			_, err := controllerReconciler.Reconcile(ctx, reconcile.Request{
+				NamespacedName: replicasNamespacedName,
+			})
+			Expect(err).NotTo(HaveOccurred())
+
+			By("Verifying StatefulSet has correct replicas")
+			statefulSet := &appsv1.StatefulSet{}
+			Eventually(func() bool {
+				err := k8sClient.Get(ctx, types.NamespacedName{
+					Name:      statefulSetName,
+					Namespace: namespace,
+				}, statefulSet)
+				if err != nil {
+					return false
+				}
+				return statefulSet.Spec.Replicas != nil && *statefulSet.Spec.Replicas == 3
+			}, timeout, interval).Should(BeTrue())
+
+			By("Cleaning up the test resource")
+			Expect(k8sClient.Delete(ctx, headscale)).To(Succeed())
+		})
+
+		It("should set correct PVC size in StatefulSet", func() {
+			By("Creating the Headscale resource with custom PVC size")
+			customSize := resource.NewQuantity(256*1024*1024, resource.BinarySI)
+			headscale := &headscalev1beta1.Headscale{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      resourceName + "-pvc",
+					Namespace: namespace,
+				},
+				Spec: headscalev1beta1.HeadscaleSpec{
+					Version:  "v0.27.1",
+					Replicas: 1,
+					Config: headscalev1beta1.HeadscaleConfig{
+						ServerURL:  "https://headscale.example.com",
+						ListenAddr: "0.0.0.0:8080",
+					},
+					PersistentVolumeClaim: headscalev1beta1.PersistentVolumeClaimConfig{
+						Size: customSize,
+					},
+				},
+			}
+			Expect(k8sClient.Create(ctx, headscale)).To(Succeed())
+
+			pvcNamespacedName := types.NamespacedName{
+				Name:      resourceName + "-pvc",
+				Namespace: namespace,
+			}
+
+			By("Reconciling the resource")
+			controllerReconciler := &HeadscaleReconciler{
+				Client: k8sClient,
+				Scheme: k8sClient.Scheme(),
+			}
+
+			_, err := controllerReconciler.Reconcile(ctx, reconcile.Request{
+				NamespacedName: pvcNamespacedName,
+			})
+			Expect(err).NotTo(HaveOccurred())
+
+			By("Verifying StatefulSet PVC template has correct size")
+			statefulSet := &appsv1.StatefulSet{}
+			Eventually(func() bool {
+				err := k8sClient.Get(ctx, types.NamespacedName{
+					Name:      statefulSetName,
+					Namespace: namespace,
+				}, statefulSet)
+				if err != nil {
+					return false
+				}
+				if len(statefulSet.Spec.VolumeClaimTemplates) == 0 {
+					return false
+				}
+				requestedStorage := statefulSet.Spec.VolumeClaimTemplates[0].Spec.Resources.Requests[corev1.ResourceStorage]
+				return requestedStorage.Equal(*customSize)
+			}, timeout, interval).Should(BeTrue())
+
+			By("Cleaning up the test resource")
+			Expect(k8sClient.Delete(ctx, headscale)).To(Succeed())
+		})
+
+		It("should set correct security context in StatefulSet", func() {
+			By("Creating the Headscale resource")
+			headscale := &headscalev1beta1.Headscale{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      resourceName + "-security",
+					Namespace: namespace,
+				},
+				Spec: headscalev1beta1.HeadscaleSpec{
+					Version:  "v0.27.1",
+					Replicas: 1,
+					Config: headscalev1beta1.HeadscaleConfig{
+						ServerURL:  "https://headscale.example.com",
+						ListenAddr: "0.0.0.0:8080",
+					},
+				},
+			}
+			Expect(k8sClient.Create(ctx, headscale)).To(Succeed())
+
+			securityNamespacedName := types.NamespacedName{
+				Name:      resourceName + "-security",
+				Namespace: namespace,
+			}
+
+			By("Reconciling the resource")
+			controllerReconciler := &HeadscaleReconciler{
+				Client: k8sClient,
+				Scheme: k8sClient.Scheme(),
+			}
+
+			_, err := controllerReconciler.Reconcile(ctx, reconcile.Request{
+				NamespacedName: securityNamespacedName,
+			})
+			Expect(err).NotTo(HaveOccurred())
+
+			By("Verifying StatefulSet has correct security context")
+			statefulSet := &appsv1.StatefulSet{}
+			Eventually(func() bool {
+				err := k8sClient.Get(ctx, types.NamespacedName{
+					Name:      statefulSetName,
+					Namespace: namespace,
+				}, statefulSet)
+				if err != nil {
+					return false
+				}
+				secCtx := statefulSet.Spec.Template.Spec.SecurityContext
+				return secCtx != nil &&
+					secCtx.RunAsUser != nil && *secCtx.RunAsUser == 65532 &&
+					secCtx.RunAsGroup != nil && *secCtx.RunAsGroup == 65532 &&
+					secCtx.FSGroup != nil && *secCtx.FSGroup == 65532 &&
+					secCtx.RunAsNonRoot != nil && *secCtx.RunAsNonRoot == true
+			}, timeout, interval).Should(BeTrue())
+
+			By("Cleaning up the test resource")
+			Expect(k8sClient.Delete(ctx, headscale)).To(Succeed())
+		})
+	})
+
+	Context("Helper function tests", func() {
+		It("should compute config hash correctly", func() {
+			By("Testing computeConfigHashFromSpec with same config")
+			config1 := &headscalev1beta1.HeadscaleConfig{
+				ServerURL:  "https://example.com",
+				ListenAddr: "0.0.0.0:8080",
+			}
+			config2 := &headscalev1beta1.HeadscaleConfig{
+				ServerURL:  "https://example.com",
+				ListenAddr: "0.0.0.0:8080",
+			}
+			hash1 := computeConfigHashFromSpec(config1)
+			hash2 := computeConfigHashFromSpec(config2)
+			Expect(hash1).To(Equal(hash2))
+
+			By("Testing computeConfigHashFromSpec with different config")
+			config3 := &headscalev1beta1.HeadscaleConfig{
+				ServerURL:  "https://different.com",
+				ListenAddr: "0.0.0.0:8080",
+			}
+			hash3 := computeConfigHashFromSpec(config3)
+			Expect(hash1).NotTo(Equal(hash3))
+		})
+
+		It("should extract port correctly", func() {
+			By("Testing extractPort with address containing port")
+			port := extractPort("0.0.0.0:9090", 8080)
+			Expect(port).To(Equal(int32(9090)))
+
+			By("Testing extractPort with colon-only prefix")
+			port = extractPort(":50443", 8080)
+			Expect(port).To(Equal(int32(50443)))
+
+			By("Testing extractPort with no port")
+			port = extractPort("0.0.0.0", 8080)
+			Expect(port).To(Equal(int32(8080)))
+
+			By("Testing extractPort with empty string")
+			port = extractPort("", 8080)
+			Expect(port).To(Equal(int32(8080)))
+
+			By("Testing extractPort with invalid port")
+			port = extractPort("0.0.0.0:invalid", 8080)
+			Expect(port).To(Equal(int32(8080)))
+		})
+
+		It("should generate correct labels", func() {
+			By("Testing labelsForHeadscale")
+			labels := labelsForHeadscale("test-instance")
+			Expect(labels).To(HaveLen(3))
+			Expect(labels["app.kubernetes.io/name"]).To(Equal("headscale"))
+			Expect(labels["app.kubernetes.io/instance"]).To(Equal("test-instance"))
+			Expect(labels["app.kubernetes.io/managed-by"]).To(Equal("headscale-operator"))
 		})
 	})
 })
