@@ -7,7 +7,6 @@ on:
 
 jobs:
   golangci-lint:
-    name: Run on Ubuntu
     runs-on: ubuntu-latest
     steps:
       - name: Clone the code
@@ -24,7 +23,6 @@ jobs:
           version: v2.6.1
 
   helm:
-    name: Helm Lint
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
