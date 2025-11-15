@@ -20,8 +20,6 @@ import (
 	"context"
 	"crypto/sha256"
 	"fmt"
-	"strconv"
-	"strings"
 
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -51,14 +49,15 @@ type HeadscaleReconciler struct {
 }
 
 const (
-	headscaleFinalizer = "headscale.infrado.cloud/finalizer"
-	configMapName      = "headscale-config"
-	statefulSetName    = "headscale"
-	serviceName        = "headscale"
-	metricsServiceName = "headscale-metrics"
-	serviceAccountName = "headscale"
-	roleName           = "headscale"
-	roleBindingName    = "headscale"
+	headscaleFinalizer      = "headscale.infrado.cloud/finalizer"
+	configMapName           = "headscale-config"
+	statefulSetName         = "headscale"
+	serviceName             = "headscale"
+	metricsServiceName      = "headscale-metrics"
+	serviceAccountName      = "headscale"
+	roleName                = "headscale"
+	roleBindingName         = "headscale"
+	defaultAPIKeySecretName = "headscale-api-key"
 )
 
 // +kubebuilder:rbac:groups=headscale.infrado.cloud,resources=headscales,verbs=get;list;watch;create;update;patch;delete
@@ -369,7 +368,7 @@ func (r *HeadscaleReconciler) reconcileRoleBinding(ctx context.Context, headscal
 func (r *HeadscaleReconciler) updateStatus(ctx context.Context, headscale *headscalev1beta1.Headscale) error {
 	// Desired condition
 	desired := metav1.Condition{
-		Type:    "Available",
+		Type:    "Ready",
 		Status:  metav1.ConditionTrue,
 		Reason:  "Reconciled",
 		Message: "Headscale is running",
@@ -413,27 +412,6 @@ func (r *HeadscaleReconciler) configMapForHeadscale(h *headscalev1beta1.Headscal
 			"config.yaml": string(configData),
 		},
 	}, nil
-}
-
-// extractPort extracts the port number from an address string like "127.0.0.1:8080" or ":8080"
-func extractPort(addr string, defaultPort int32) int32 {
-	if addr == "" {
-		return defaultPort
-	}
-
-	// Split by colon to get the port part
-	parts := strings.Split(addr, ":")
-	if len(parts) < 2 {
-		return defaultPort
-	}
-
-	portStr := parts[len(parts)-1]
-	port, err := strconv.ParseInt(portStr, 10, 32)
-	if err != nil {
-		return defaultPort
-	}
-
-	return int32(port)
 }
 
 // computeConfigHashFromSpec computes a SHA256 hash of the Headscale config spec
@@ -737,7 +715,7 @@ func (r *HeadscaleReconciler) roleForHeadscale(h *headscalev1beta1.Headscale) *r
 	// Determine the API key secret name from the spec, with fallback to default
 	secretName := h.Spec.APIKey.SecretName
 	if secretName == "" {
-		secretName = "headscale-api-key"
+		secretName = defaultAPIKeySecretName
 	}
 
 	return &rbacv1.Role{

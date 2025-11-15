@@ -23,7 +23,6 @@ import (
 	"strconv"
 	"time"
 
-	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -91,7 +90,7 @@ func (r *HeadscaleUserReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 		if apierrors.IsNotFound(err) {
 			log.Error(err, "Referenced Headscale instance not found", "HeadscaleRef", headscaleUser.Spec.HeadscaleRef)
 			if err := r.updateStatusCondition(ctx, headscaleUser, metav1.Condition{
-				Type:    "Available",
+				Type:    "Ready",
 				Status:  metav1.ConditionFalse,
 				Reason:  "HeadscaleNotFound",
 				Message: fmt.Sprintf("Referenced Headscale instance %s not found", headscaleUser.Spec.HeadscaleRef),
@@ -118,12 +117,12 @@ func (r *HeadscaleUserReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 					return ctrl.Result{}, err
 				}
 				// Requeue immediately to recreate the user
-				return ctrl.Result{Requeue: true}, nil
+				return ctrl.Result{}, nil
 			}
 			// For other errors (network, API, etc), log and retry later
 			log.Error(err, "Failed to verify user in Headscale")
 			if err := r.updateStatusCondition(ctx, headscaleUser, metav1.Condition{
-				Type:    "Available",
+				Type:    "Ready",
 				Status:  metav1.ConditionFalse,
 				Reason:  "UserVerificationFailed",
 				Message: fmt.Sprintf("Failed to verify user: %v", err),
@@ -135,7 +134,7 @@ func (r *HeadscaleUserReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 
 		// User exists and is verified
 		if err := r.updateStatusCondition(ctx, headscaleUser, metav1.Condition{
-			Type:    "Available",
+			Type:    "Ready",
 			Status:  metav1.ConditionTrue,
 			Reason:  "UserReady",
 			Message: "User is ready in Headscale",
@@ -149,7 +148,7 @@ func (r *HeadscaleUserReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 	if err := r.createUser(ctx, headscale, headscaleUser); err != nil {
 		log.Error(err, "Failed to create user in Headscale")
 		if err := r.updateStatusCondition(ctx, headscaleUser, metav1.Condition{
-			Type:    "Available",
+			Type:    "Ready",
 			Status:  metav1.ConditionFalse,
 			Reason:  "UserCreationFailed",
 			Message: fmt.Sprintf("Failed to create user: %v", err),
@@ -161,7 +160,7 @@ func (r *HeadscaleUserReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 
 	// Update status to indicate user is ready
 	if err := r.updateStatusCondition(ctx, headscaleUser, metav1.Condition{
-		Type:    "Available",
+		Type:    "Ready",
 		Status:  metav1.ConditionTrue,
 		Reason:  "UserCreated",
 		Message: "User successfully created in Headscale",
@@ -231,13 +230,13 @@ func (r *HeadscaleUserReconciler) createUser(ctx context.Context, headscale *hea
 	log := logf.FromContext(ctx)
 
 	// Get the API key from the secret
-	apiKey, err := r.getAPIKey(ctx, headscale)
+	apiKey, err := getAPIKey(ctx, r.Client, headscale)
 	if err != nil {
 		return fmt.Errorf("failed to get API key: %w", err)
 	}
 
 	// Get the gRPC service address
-	serviceAddr := r.getGRPCServiceAddress(headscale)
+	serviceAddr := getGRPCServiceAddress(headscale)
 
 	// Create Headscale client with API key
 	hsClient, err := hsclient.NewClientWithAPIKey(serviceAddr, apiKey)
@@ -282,13 +281,13 @@ func (r *HeadscaleUserReconciler) deleteUser(ctx context.Context, headscale *hea
 	}
 
 	// Get the API key from the secret
-	apiKey, err := r.getAPIKey(ctx, headscale)
+	apiKey, err := getAPIKey(ctx, r.Client, headscale)
 	if err != nil {
 		return fmt.Errorf("failed to get API key: %w", err)
 	}
 
 	// Get the gRPC service address
-	serviceAddr := r.getGRPCServiceAddress(headscale)
+	serviceAddr := getGRPCServiceAddress(headscale)
 
 	// Create Headscale client with API key
 	hsClient, err := hsclient.NewClientWithAPIKey(serviceAddr, apiKey)
@@ -315,13 +314,13 @@ func (r *HeadscaleUserReconciler) verifyUser(ctx context.Context, headscale *hea
 	log := logf.FromContext(ctx)
 
 	// Get the API key from the secret
-	apiKey, err := r.getAPIKey(ctx, headscale)
+	apiKey, err := getAPIKey(ctx, r.Client, headscale)
 	if err != nil {
 		return fmt.Errorf("failed to get API key: %w", err)
 	}
 
 	// Get the gRPC service address
-	serviceAddr := r.getGRPCServiceAddress(headscale)
+	serviceAddr := getGRPCServiceAddress(headscale)
 
 	// Create Headscale client with API key
 	hsClient, err := hsclient.NewClientWithAPIKey(serviceAddr, apiKey)
@@ -341,42 +340,6 @@ func (r *HeadscaleUserReconciler) verifyUser(ctx context.Context, headscale *hea
 	}
 
 	return nil
-}
-
-// getAPIKey retrieves the API key from the secret created by the apikey-manager sidecar
-func (r *HeadscaleUserReconciler) getAPIKey(ctx context.Context, headscale *headscalev1beta1.Headscale) (string, error) {
-	// Get the secret name from the Headscale spec
-	secretName := headscale.Spec.APIKey.SecretName
-	if secretName == "" {
-		secretName = "headscale-api-key"
-	}
-
-	// Get the secret
-	secret := &corev1.Secret{}
-	err := r.Get(ctx, types.NamespacedName{
-		Name:      secretName,
-		Namespace: headscale.Namespace,
-	}, secret)
-	if err != nil {
-		return "", fmt.Errorf("failed to get API key secret: %w", err)
-	}
-
-	// Get the API key from the secret data
-	apiKeyBytes, ok := secret.Data["api-key"]
-	if !ok {
-		return "", fmt.Errorf("api-key not found in secret %s", secretName)
-	}
-
-	return string(apiKeyBytes), nil
-}
-
-// getGRPCServiceAddress returns the gRPC service address for the Headscale instance
-func (r *HeadscaleUserReconciler) getGRPCServiceAddress(headscale *headscalev1beta1.Headscale) string {
-	// Extract the gRPC port from the configuration
-	grpcPort := extractPort(headscale.Spec.Config.GRPCListenAddr, 50443)
-
-	// Return the service address and let Kubernetes DNS search domain handle the rest
-	return fmt.Sprintf("%s.%s.svc:%d", serviceName, headscale.Namespace, grpcPort)
 }
 
 // updateStatusCondition updates the status condition of the HeadscaleUser
