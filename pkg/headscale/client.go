@@ -1,4 +1,5 @@
 /*
+
 Copyright 2025.
 
 Licensed under the Apache License, Version 2.0 (the "License");
@@ -14,10 +15,11 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package apikey
+package headscale
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
@@ -28,15 +30,18 @@ import (
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
-// HeadscaleClient wraps the Headscale gRPC client
-type HeadscaleClient struct {
+// ErrUserNotFound is returned when a user is not found in Headscale
+var ErrUserNotFound = errors.New("user not found")
+
+// Client wraps the Headscale gRPC client
+type Client struct {
 	conn   *grpc.ClientConn
 	client v1.HeadscaleServiceClient
 	apiKey string
 }
 
-// NewHeadscaleClient creates a new Headscale client connected via Unix socket
-func NewHeadscaleClient(socketPath string) (*HeadscaleClient, error) {
+// NewClient creates a new Headscale client connected via Unix socket
+func NewClient(socketPath string) (*Client, error) {
 	// Connect to Unix socket using gRPC
 	conn, err := grpc.NewClient(
 		fmt.Sprintf("unix://%s", socketPath),
@@ -48,24 +53,36 @@ func NewHeadscaleClient(socketPath string) (*HeadscaleClient, error) {
 
 	client := v1.NewHeadscaleServiceClient(conn)
 
-	return &HeadscaleClient{
+	return &Client{
 		conn:   conn,
 		client: client,
 	}, nil
 }
 
-// NewHeadscaleClientWithAPIKey creates a new Headscale client connected via gRPC service with API key authentication
-func NewHeadscaleClientWithAPIKey(serverAddr string, apiKey string) (*HeadscaleClient, error) {
+// apiKeyInterceptor creates a unary interceptor that adds the API key to the request context
+func apiKeyInterceptor(apiKey string) grpc.UnaryClientInterceptor {
+	return func(
+		ctx context.Context,
+		method string,
+		req, reply any,
+		cc *grpc.ClientConn,
+		invoker grpc.UnaryInvoker,
+		opts ...grpc.CallOption,
+	) error {
+		if apiKey != "" {
+			ctx = metadata.AppendToOutgoingContext(ctx, "authorization", "Bearer "+apiKey)
+		}
+		return invoker(ctx, method, req, reply, cc, opts...)
+	}
+}
+
+// NewClientWithAPIKey creates a new Headscale client connected via gRPC service with API key authentication
+func NewClientWithAPIKey(serverAddr string, apiKey string) (*Client, error) {
 	// Create a client with API key interceptor
 	conn, err := grpc.NewClient(
 		serverAddr,
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
-		grpc.WithUnaryInterceptor(func(ctx context.Context, method string, req, reply interface{}, cc *grpc.ClientConn, invoker grpc.UnaryInvoker, opts ...grpc.CallOption) error {
-			if apiKey != "" {
-				ctx = metadata.AppendToOutgoingContext(ctx, "authorization", "Bearer "+apiKey)
-			}
-			return invoker(ctx, method, req, reply, cc, opts...)
-		}),
+		grpc.WithUnaryInterceptor(apiKeyInterceptor(apiKey)),
 	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to connect to Headscale server: %w", err)
@@ -73,7 +90,7 @@ func NewHeadscaleClientWithAPIKey(serverAddr string, apiKey string) (*HeadscaleC
 
 	client := v1.NewHeadscaleServiceClient(conn)
 
-	return &HeadscaleClient{
+	return &Client{
 		conn:   conn,
 		client: client,
 		apiKey: apiKey,
@@ -81,7 +98,7 @@ func NewHeadscaleClientWithAPIKey(serverAddr string, apiKey string) (*HeadscaleC
 }
 
 // Close closes the gRPC connection
-func (c *HeadscaleClient) Close() error {
+func (c *Client) Close() error {
 	if c.conn != nil {
 		return c.conn.Close()
 	}
@@ -89,7 +106,7 @@ func (c *HeadscaleClient) Close() error {
 }
 
 // CreateAPIKey creates a new API key with the specified expiration
-func (c *HeadscaleClient) CreateAPIKey(ctx context.Context, expiration time.Duration) (string, time.Time, error) {
+func (c *Client) CreateAPIKey(ctx context.Context, expiration time.Duration) (string, time.Time, error) {
 	expirationTime := time.Now().Add(expiration)
 
 	req := &v1.CreateApiKeyRequest{
@@ -105,7 +122,7 @@ func (c *HeadscaleClient) CreateAPIKey(ctx context.Context, expiration time.Dura
 }
 
 // ExpireAPIKey expires an existing API key
-func (c *HeadscaleClient) ExpireAPIKey(ctx context.Context, prefix string) error {
+func (c *Client) ExpireAPIKey(ctx context.Context, prefix string) error {
 	req := &v1.ExpireApiKeyRequest{
 		Prefix: prefix,
 	}
@@ -119,7 +136,7 @@ func (c *HeadscaleClient) ExpireAPIKey(ctx context.Context, prefix string) error
 }
 
 // ListAPIKeys lists all API keys
-func (c *HeadscaleClient) ListAPIKeys(ctx context.Context) ([]*v1.ApiKey, error) {
+func (c *Client) ListAPIKeys(ctx context.Context) ([]*v1.ApiKey, error) {
 	req := &v1.ListApiKeysRequest{}
 
 	resp, err := c.client.ListApiKeys(ctx, req)
@@ -131,7 +148,7 @@ func (c *HeadscaleClient) ListAPIKeys(ctx context.Context) ([]*v1.ApiKey, error)
 }
 
 // WaitForReady waits for Headscale to be ready by attempting to list API keys
-func (c *HeadscaleClient) WaitForReady(ctx context.Context, maxRetries int, retryInterval time.Duration) error {
+func (c *Client) WaitForReady(ctx context.Context, maxRetries int, retryInterval time.Duration) error {
 	for i := 0; i < maxRetries; i++ {
 		_, err := c.ListAPIKeys(ctx)
 		if err == nil {
@@ -152,7 +169,7 @@ func (c *HeadscaleClient) WaitForReady(ctx context.Context, maxRetries int, retr
 }
 
 // CreateUser creates a new user in Headscale
-func (c *HeadscaleClient) CreateUser(ctx context.Context, username, displayName, email, pictureURL string) (*v1.User, error) {
+func (c *Client) CreateUser(ctx context.Context, username, displayName, email, pictureURL string) (*v1.User, error) {
 	req := &v1.CreateUserRequest{
 		Name: username,
 	}
@@ -177,7 +194,7 @@ func (c *HeadscaleClient) CreateUser(ctx context.Context, username, displayName,
 }
 
 // DeleteUser deletes a user from Headscale by ID
-func (c *HeadscaleClient) DeleteUser(ctx context.Context, userID uint64) error {
+func (c *Client) DeleteUser(ctx context.Context, userID uint64) error {
 	req := &v1.DeleteUserRequest{
 		Id: userID,
 	}
@@ -191,7 +208,7 @@ func (c *HeadscaleClient) DeleteUser(ctx context.Context, userID uint64) error {
 }
 
 // GetUserByName retrieves a user from Headscale by name
-func (c *HeadscaleClient) GetUserByName(ctx context.Context, username string) (*v1.User, error) {
+func (c *Client) GetUserByName(ctx context.Context, username string) (*v1.User, error) {
 	req := &v1.ListUsersRequest{
 		Name: username,
 	}
@@ -203,7 +220,7 @@ func (c *HeadscaleClient) GetUserByName(ctx context.Context, username string) (*
 
 	users := resp.GetUsers()
 	if len(users) == 0 {
-		return nil, fmt.Errorf("user %s not found", username)
+		return nil, fmt.Errorf("%w: %s", ErrUserNotFound, username)
 	}
 
 	return users[0], nil

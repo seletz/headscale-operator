@@ -18,12 +18,13 @@ package controller
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strconv"
 	"time"
 
 	corev1 "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/api/errors"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -34,7 +35,7 @@ import (
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 
 	headscalev1beta1 "github.com/infradohq/headscale-operator/api/v1beta1"
-	"github.com/infradohq/headscale-operator/internal/apikey"
+	hsclient "github.com/infradohq/headscale-operator/pkg/headscale"
 )
 
 const (
@@ -62,7 +63,7 @@ func (r *HeadscaleUserReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 	headscaleUser := &headscalev1beta1.HeadscaleUser{}
 	err := r.Get(ctx, req.NamespacedName, headscaleUser)
 	if err != nil {
-		if errors.IsNotFound(err) {
+		if apierrors.IsNotFound(err) {
 			log.Info("HeadscaleUser resource not found. Ignoring since object must be deleted")
 			return ctrl.Result{}, nil
 		}
@@ -87,7 +88,7 @@ func (r *HeadscaleUserReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 		Namespace: headscaleUser.Namespace,
 	}, headscale)
 	if err != nil {
-		if errors.IsNotFound(err) {
+		if apierrors.IsNotFound(err) {
 			log.Error(err, "Referenced Headscale instance not found", "HeadscaleRef", headscaleUser.Spec.HeadscaleRef)
 			if err := r.updateStatusCondition(ctx, headscaleUser, metav1.Condition{
 				Type:    "Available",
@@ -107,6 +108,19 @@ func (r *HeadscaleUserReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 	if headscaleUser.Status.UserID != "" {
 		// User already created, verify it still exists
 		if err := r.verifyUser(ctx, headscale, headscaleUser); err != nil {
+			// Only recreate if the user was not found
+			if errors.Is(err, hsclient.ErrUserNotFound) {
+				log.Info("User not found in Headscale, will recreate", "Username", headscaleUser.Spec.Username)
+				// Clear the UserID so we recreate the user
+				headscaleUser.Status.UserID = ""
+				headscaleUser.Status.CreatedAt = ""
+				if err := r.Status().Update(ctx, headscaleUser); err != nil {
+					return ctrl.Result{}, err
+				}
+				// Requeue immediately to recreate the user
+				return ctrl.Result{Requeue: true}, nil
+			}
+			// For other errors (network, API, etc), log and retry later
 			log.Error(err, "Failed to verify user in Headscale")
 			if err := r.updateStatusCondition(ctx, headscaleUser, metav1.Condition{
 				Type:    "Available",
@@ -171,7 +185,7 @@ func (r *HeadscaleUserReconciler) handleDeletion(ctx context.Context, headscaleU
 			Namespace: headscaleUser.Namespace,
 		}, headscale)
 		if err != nil {
-			if errors.IsNotFound(err) {
+			if apierrors.IsNotFound(err) {
 				log.Info("Referenced Headscale instance not found during deletion, removing finalizer", "HeadscaleRef", headscaleUser.Spec.HeadscaleRef)
 				controllerutil.RemoveFinalizer(headscaleUser, headscaleUserFinalizer)
 				if err := r.Update(ctx, headscaleUser); err != nil {
@@ -226,7 +240,7 @@ func (r *HeadscaleUserReconciler) createUser(ctx context.Context, headscale *hea
 	serviceAddr := r.getGRPCServiceAddress(headscale)
 
 	// Create Headscale client with API key
-	hsClient, err := apikey.NewHeadscaleClientWithAPIKey(serviceAddr, apiKey)
+	hsClient, err := hsclient.NewClientWithAPIKey(serviceAddr, apiKey)
 	if err != nil {
 		return fmt.Errorf("failed to create Headscale client: %w", err)
 	}
@@ -277,7 +291,7 @@ func (r *HeadscaleUserReconciler) deleteUser(ctx context.Context, headscale *hea
 	serviceAddr := r.getGRPCServiceAddress(headscale)
 
 	// Create Headscale client with API key
-	hsClient, err := apikey.NewHeadscaleClientWithAPIKey(serviceAddr, apiKey)
+	hsClient, err := hsclient.NewClientWithAPIKey(serviceAddr, apiKey)
 	if err != nil {
 		return fmt.Errorf("failed to create Headscale client: %w", err)
 	}
@@ -310,7 +324,7 @@ func (r *HeadscaleUserReconciler) verifyUser(ctx context.Context, headscale *hea
 	serviceAddr := r.getGRPCServiceAddress(headscale)
 
 	// Create Headscale client with API key
-	hsClient, err := apikey.NewHeadscaleClientWithAPIKey(serviceAddr, apiKey)
+	hsClient, err := hsclient.NewClientWithAPIKey(serviceAddr, apiKey)
 	if err != nil {
 		return fmt.Errorf("failed to create Headscale client: %w", err)
 	}
