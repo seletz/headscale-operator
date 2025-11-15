@@ -11,6 +11,7 @@ rules:
   - ""
   resources:
   - configmaps
+  - serviceaccounts
   - services
   verbs:
   - create
@@ -29,6 +30,17 @@ rules:
   - list
   - watch
 - apiGroups:
+  - ""
+  resources:
+  - secrets
+  verbs:
+  - create
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
   - apps
   resources:
   - statefulsets
@@ -44,6 +56,7 @@ rules:
   - headscale.infrado.cloud
   resources:
   - headscales
+  - headscaleusers
   verbs:
   - create
   - delete
@@ -56,16 +69,31 @@ rules:
   - headscale.infrado.cloud
   resources:
   - headscales/finalizers
+  - headscaleusers/finalizers
   verbs:
   - update
 - apiGroups:
   - headscale.infrado.cloud
   resources:
   - headscales/status
+  - headscaleusers/status
   verbs:
   - get
   - patch
   - update
+- apiGroups:
+  - rbac.authorization.k8s.io
+  resources:
+  - rolebindings
+  - roles
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding

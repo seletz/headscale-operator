@@ -22,12 +22,13 @@ import (
 	"time"
 
 	"github.com/go-logr/logr"
+	"github.com/infradohq/headscale-operator/pkg/headscale"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 )
 
 // Manager handles API key lifecycle management
 type Manager struct {
-	headscaleClient *HeadscaleClient
+	headscaleClient *headscale.Client
 	secretManager   *SecretManager
 	secretName      string
 	expiration      time.Duration
@@ -69,7 +70,7 @@ func NewManager(cfg Config, log logr.Logger) (*Manager, error) {
 	)
 
 	// Create Headscale client
-	headscaleClient, err := NewHeadscaleClient(cfg.SocketPath)
+	headscaleClient, err := headscale.NewClient(cfg.SocketPath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create Headscale client: %w", err)
 	}
