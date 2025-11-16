@@ -620,8 +620,9 @@ func (r *HeadscaleReconciler) statefulSetForHeadscale(h *headscalev1beta1.Headsc
 						FSGroup:      ptr.To(int64(65532)),
 						RunAsNonRoot: ptr.To(true),
 					},
-					Containers: containers,
-					Volumes:    volumes,
+					Containers:       containers,
+					Volumes:          volumes,
+					ImagePullSecrets: buildImagePullSecrets(h.Spec.ImagePullSecrets),
 				},
 			},
 			VolumeClaimTemplates: []corev1.PersistentVolumeClaim{
@@ -761,6 +762,21 @@ func (r *HeadscaleReconciler) roleBindingForHeadscale(h *headscalev1beta1.Headsc
 			},
 		},
 	}
+}
+
+// buildImagePullSecrets converts a list of secret names to LocalObjectReferences
+func buildImagePullSecrets(secretNames []string) []corev1.LocalObjectReference {
+	if len(secretNames) == 0 {
+		return nil
+	}
+
+	secrets := make([]corev1.LocalObjectReference, len(secretNames))
+	for i, name := range secretNames {
+		secrets[i] = corev1.LocalObjectReference{
+			Name: name,
+		}
+	}
+	return secrets
 }
 
 // labelsForHeadscale returns the labels for selecting the resources

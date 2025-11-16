@@ -540,6 +540,12 @@ spec:
                 description: Image is the container image to use for Headscale.
                 minLength: 1
                 type: string
+              image_pull_secrets:
+                description: ImagePullSecrets is a list of references to secrets for
+                  pulling images from private registries
+                items:
+                  type: string
+                type: array
               persistent_volume_claim:
                 description: PersistentVolumeClaim configuration for data storage
                 properties:

@@ -637,6 +637,10 @@ type HeadscaleSpec struct {
 	// APIKey configuration for automatic API key management
 	// +optional
 	APIKey APIKeyConfig `json:"api_key"`
+
+	// ImagePullSecrets is a list of references to secrets for pulling images from private registries
+	// +optional
+	ImagePullSecrets []string `json:"image_pull_secrets,omitempty"`
 }
 
 // HeadscaleStatus defines the observed state of Headscale.
