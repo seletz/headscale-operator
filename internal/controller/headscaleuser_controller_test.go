@@ -63,7 +63,7 @@ var _ = Describe("HeadscaleUser Controller", func() {
 					Namespace: namespace,
 				},
 				Spec: headscalev1beta1.HeadscaleSpec{
-					Version:  "v0.27.1",
+					Version:  "v0.28.0",
 					Replicas: 1,
 					Config: headscalev1beta1.HeadscaleConfig{
 						ServerURL:         "https://headscale.example.com",
@@ -339,7 +339,7 @@ var _ = Describe("HeadscaleUser Controller", func() {
 					Namespace: namespace,
 				},
 				Spec: headscalev1beta1.HeadscaleSpec{
-					Version:  "v0.27.1",
+					Version:  "v0.28.0",
 					Replicas: 1,
 					Config: headscalev1beta1.HeadscaleConfig{
 						ServerURL:  "https://temp.example.com",

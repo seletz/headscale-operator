@@ -255,16 +255,15 @@ func (c *Client) CreatePreAuthKey(
 	return resp.GetPreAuthKey(), nil
 }
 
-// ExpirePreAuthKey expires a preauth key by user and key
-func (c *Client) ExpirePreAuthKey(ctx context.Context, userID uint64, key string) error {
-	req := &v1.ExpirePreAuthKeyRequest{
-		User: userID,
-		Key:  key,
+// DeletePreAuthKey deletes a preauth key by key ID
+func (c *Client) DeletePreAuthKey(ctx context.Context, id uint64) error {
+	req := &v1.DeletePreAuthKeyRequest{
+		Id: id,
 	}
 
-	_, err := c.client.ExpirePreAuthKey(ctx, req)
+	_, err := c.client.DeletePreAuthKey(ctx, req)
 	if err != nil {
-		return fmt.Errorf("failed to expire preauth key: %w", err)
+		return fmt.Errorf("failed to delete preauth key: %w", err)
 	}
 
 	return nil

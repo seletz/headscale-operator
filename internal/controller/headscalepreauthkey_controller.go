@@ -20,9 +20,10 @@ import (
 	"context"
 	"fmt"
 	"strconv"
-	"strings"
 	"time"
 
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
@@ -276,61 +277,24 @@ func (r *HeadscalePreAuthKeyReconciler) handleDeletion(
 			return ctrl.Result{}, err
 		}
 
-		// Determine the user ID if we need to expire the key
-		var userID uint64
+		// Delete the preauth key in Headscale if we have a KeyID
 		if preAuthKey.Status.KeyID != "" {
-			if preAuthKey.Spec.HeadscaleUserRef != "" {
-				// Get the referenced HeadscaleUser instance
-				headscaleUser := &headscalev1beta1.HeadscaleUser{}
-				err = r.Get(ctx, types.NamespacedName{
-					Name:      preAuthKey.Spec.HeadscaleUserRef,
-					Namespace: preAuthKey.Namespace,
-				}, headscaleUser)
-				if err != nil {
-					if apierrors.IsNotFound(err) {
-						log.Info("Referenced HeadscaleUser not found during deletion, skipping expiration",
-							"HeadscaleUserRef", preAuthKey.Spec.HeadscaleUserRef)
-					} else {
-						log.Error(err, "Failed to get referenced HeadscaleUser during deletion")
-						return ctrl.Result{}, err
-					}
-				} else if headscaleUser.Status.UserID != "" {
-					parsedUserID, err := strconv.ParseUint(headscaleUser.Status.UserID, 10, 64)
-					if err == nil {
-						userID = parsedUserID
-					} else {
-						log.Error(err, "Failed to parse user ID during deletion")
-					}
-				}
-			} else if preAuthKey.Spec.UserID != 0 {
-				userID = preAuthKey.Spec.UserID
-			}
-		}
-
-		// Expire the preauth key in Headscale if we have a valid userID
-		if userID != 0 {
-			// Get the preauth key string from the secret
-			keyString, err := r.getPreAuthKeyFromSecret(ctx, preAuthKey)
+			keyID, err := strconv.ParseUint(preAuthKey.Status.KeyID, 10, 64)
 			if err != nil {
-				if apierrors.IsNotFound(err) {
-					log.Info("Secret not found during deletion, skipping expiration")
-				} else {
-					log.Error(err, "Failed to get preauth key from secret")
-					return ctrl.Result{}, err
-				}
+				log.Error(err, "Failed to parse KeyID from status", "KeyID", preAuthKey.Status.KeyID)
+				// We can't delete it without ID, so logging error and proceeding to clean up secret and finalizer
 			} else {
-				// We have the key, try to expire it
-				if err := r.expirePreAuthKey(ctx, headscale, userID, keyString); err != nil {
-					// Check if the error is because the key was already expired or not found
-					// This can happen if the key expired naturally or was manually expired
+				// Delete the key
+				if err := r.deletePreAuthKey(ctx, headscale, keyID); err != nil {
+					// Check if the error is because the key was already deleted or not found
 					if isPreAuthKeyNotFoundError(err) {
-						log.Info("PreAuth key already expired or not found in Headscale, skipping")
+						log.Info("PreAuth key already deleted or not found in Headscale, skipping")
 					} else {
-						log.Error(err, "Failed to expire preauth key in Headscale")
+						log.Error(err, "Failed to delete preauth key in Headscale")
 						return ctrl.Result{}, err
 					}
 				} else {
-					log.Info("Successfully expired preauth key in Headscale", "UserID", userID)
+					log.Info("Successfully deleted preauth key in Headscale", "KeyID", keyID)
 				}
 			}
 		}
@@ -503,12 +467,11 @@ func (r *HeadscalePreAuthKeyReconciler) createPreAuthKey(
 	return nil
 }
 
-// expirePreAuthKey expires a preauth key in the Headscale instance
-func (r *HeadscalePreAuthKeyReconciler) expirePreAuthKey(
+// deletePreAuthKey deletes a preauth key in the Headscale instance
+func (r *HeadscalePreAuthKeyReconciler) deletePreAuthKey(
 	ctx context.Context,
 	headscale *headscalev1beta1.Headscale,
-	userID uint64,
-	keyString string,
+	id uint64,
 ) error {
 	log := logf.FromContext(ctx)
 
@@ -532,56 +495,28 @@ func (r *HeadscalePreAuthKeyReconciler) expirePreAuthKey(
 		}
 	}()
 
-	// Expire the preauth key
-	if err := hsClient.ExpirePreAuthKey(ctx, userID, keyString); err != nil {
-		return fmt.Errorf("failed to expire preauth key via Headscale API: %w", err)
+	// Delete the preauth key
+	if err := hsClient.DeletePreAuthKey(ctx, id); err != nil {
+		return fmt.Errorf("failed to delete preauth key via Headscale API: %w", err)
 	}
 
-	log.Info("Expired preauth key in Headscale", "UserID", userID)
+	log.Info("Deleted preauth key in Headscale", "KeyID", id)
 	return nil
 }
 
 // isPreAuthKeyNotFoundError checks if the error indicates the preauth key
-// doesn't exist or is already expired by checking for "AuthKey not found" message
+// doesn't exist by checking the gRPC status code
 func isPreAuthKeyNotFoundError(err error) bool {
 	if err == nil {
 		return false
 	}
 
-	// Check for "AuthKey not found" in the error message using strings.Contains
-	// to be more resilient to minor error message changes.
-	// Headscale does not return proper gRPC status codes, so we rely on message matching.
-	return strings.Contains(err.Error(), "AuthKey not found")
-}
-
-// getPreAuthKeyFromSecret retrieves the preauth key string from the secret
-func (r *HeadscalePreAuthKeyReconciler) getPreAuthKeyFromSecret(
-	ctx context.Context,
-	preAuthKey *headscalev1beta1.HeadscalePreAuthKey,
-) (string, error) {
-	// Determine the secret name
-	secretName := preAuthKey.Spec.SecretName
-	if secretName == "" {
-		secretName = preAuthKey.Name
+	// Check for gRPC NotFound status code
+	if st, ok := status.FromError(err); ok {
+		return st.Code() == codes.NotFound
 	}
 
-	// Get the secret
-	secret := &corev1.Secret{}
-	err := r.Get(ctx, types.NamespacedName{
-		Name:      secretName,
-		Namespace: preAuthKey.Namespace,
-	}, secret)
-	if err != nil {
-		return "", fmt.Errorf("failed to get preauth key secret: %w", err)
-	}
-
-	// Get the preauth key from the secret data
-	keyBytes, ok := secret.Data[preAuthKeySecretKey]
-	if !ok {
-		return "", fmt.Errorf("preauth key not found in secret %s", secretName)
-	}
-
-	return string(keyBytes), nil
+	return false
 }
 
 // deleteSecret deletes the secret containing the preauth key
