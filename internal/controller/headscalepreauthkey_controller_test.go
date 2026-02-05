@@ -23,6 +23,8 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/resource"
@@ -71,7 +73,7 @@ var _ = Describe("HeadscalePreAuthKey Controller", func() {
 					Namespace: namespace,
 				},
 				Spec: headscalev1beta1.HeadscaleSpec{
-					Version:  "v0.27.1",
+					Version:  "v0.28.0",
 					Replicas: 1,
 					Config: headscalev1beta1.HeadscaleConfig{
 						ServerURL:         "https://headscale.example.com",
@@ -552,6 +554,58 @@ var _ = Describe("HeadscalePreAuthKey Controller", func() {
 			Expect(err).NotTo(HaveOccurred())
 		})
 
+		It("should handle deletion with KeyID in status when Headscale instance is missing", func() {
+			By("Creating a HeadscalePreAuthKey with a non-existent Headscale reference")
+			preAuthKey := &headscalev1beta1.HeadscalePreAuthKey{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:       resourceName + "-deletion-keyid",
+					Namespace:  namespace,
+					Finalizers: []string{headscalePreAuthKeyFinalizer},
+				},
+				Spec: headscalev1beta1.HeadscalePreAuthKeySpec{
+					HeadscaleRef:     "non-existent-headscale",
+					HeadscaleUserRef: headscaleUserName,
+					Expiration:       "1h",
+				},
+			}
+			Expect(k8sClient.Create(ctx, preAuthKey)).To(Succeed())
+
+			deletionKeyIDNamespacedName := types.NamespacedName{
+				Name:      resourceName + "-deletion-keyid",
+				Namespace: namespace,
+			}
+
+			By("Setting KeyID in status to simulate a created key")
+			Eventually(func() error {
+				err := k8sClient.Get(ctx, deletionKeyIDNamespacedName, preAuthKey)
+				if err != nil {
+					return err
+				}
+				preAuthKey.Status.KeyID = "12345"
+				return k8sClient.Status().Update(ctx, preAuthKey)
+			}, timeout, interval).Should(Succeed())
+
+			By("Deleting the HeadscalePreAuthKey")
+			Expect(k8sClient.Delete(ctx, preAuthKey)).To(Succeed())
+
+			By("Reconciling the deletion - should remove finalizer since Headscale instance is missing")
+			controllerReconciler := &HeadscalePreAuthKeyReconciler{
+				Client: k8sClient,
+				Scheme: k8sClient.Scheme(),
+			}
+
+			_, err := controllerReconciler.Reconcile(ctx, reconcile.Request{
+				NamespacedName: deletionKeyIDNamespacedName,
+			})
+			Expect(err).NotTo(HaveOccurred())
+
+			By("Verifying the resource is deleted (finalizer was removed)")
+			Eventually(func() bool {
+				err := k8sClient.Get(ctx, deletionKeyIDNamespacedName, preAuthKey)
+				return errors.IsNotFound(err)
+			}, timeout, interval).Should(BeTrue())
+		})
+
 		It("should create secret with custom name when SecretName is specified", func() {
 			By("Creating a HeadscalePreAuthKey with custom SecretName")
 			customSecretName := "custom-secret-name"
@@ -663,11 +717,15 @@ var _ = Describe("HeadscalePreAuthKey Controller", func() {
 
 	Context("Helper function tests", func() {
 		It("should correctly identify PreAuthKey not found errors", func() {
-			By("Testing isPreAuthKeyNotFoundError with matching error")
-			err := errors.NewBadRequest("AuthKey not found in database")
+			By("Testing isPreAuthKeyNotFoundError with gRPC NotFound error")
+			err := status.Error(codes.NotFound, "PreAuthKey not found")
 			Expect(isPreAuthKeyNotFoundError(err)).To(BeTrue())
 
-			By("Testing isPreAuthKeyNotFoundError with non-matching error")
+			By("Testing isPreAuthKeyNotFoundError with non-matching gRPC error")
+			err = status.Error(codes.Internal, "some other error")
+			Expect(isPreAuthKeyNotFoundError(err)).To(BeFalse())
+
+			By("Testing isPreAuthKeyNotFoundError with non-gRPC error")
 			err = errors.NewBadRequest("some other error")
 			Expect(isPreAuthKeyNotFoundError(err)).To(BeFalse())
 

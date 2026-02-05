@@ -425,6 +425,10 @@ type OIDCConfig struct {
 	// PKCE configuration
 	// +optional
 	PKCE PKCEConfig `json:"pkce"`
+
+	// EmailVerifiedRequired requires email verification
+	// +optional
+	EmailVerifiedRequired *bool `json:"email_verified_required,omitempty"`
 }
 
 // LogTailConfig represents Logtail configuration
@@ -445,6 +449,85 @@ type PersistentVolumeClaimConfig struct {
 	// StorageClassName is the storage class name for the PVC
 	// +optional
 	StorageClassName *string `json:"storage_class_name,omitempty"`
+}
+
+// TaildropConfig represents Taildrop configuration
+type TaildropConfig struct {
+	// Enabled indicates if Taildrop is enabled
+	// +optional
+	Enabled *bool `json:"enabled,omitempty"`
+}
+
+// Tuning contains advanced performance tuning parameters for Headscale.
+// These settings control internal batching, timeouts, and resource allocation.
+// The defaults are carefully chosen for typical deployments and should rarely
+// need adjustment. Changes to these values can significantly impact performance
+// and resource usage.
+type Tuning struct {
+	// NotifierSendTimeout is the maximum time to wait when sending notifications
+	// to connected clients about network changes.
+	// +kubebuilder:validation:Pattern=`^([0-9]+(\.[0-9]+)?(ns|us|µs|ms|s|m|h))+$`
+	// +optional
+	NotifierSendTimeout *string `json:"notifier_send_timeout,omitempty"`
+
+	// BatchChangeDelay controls how long to wait before sending batched updates
+	// to clients when multiple changes occur in rapid succession.
+	// +kubebuilder:validation:Pattern=`^([0-9]+(\.[0-9]+)?(ns|us|µs|ms|s|m|h))+$`
+	// +optional
+	BatchChangeDelay *string `json:"batch_change_delay,omitempty"`
+
+	// NodeMapSessionBufferedChanSize sets the buffer size for the channel that
+	// queues map updates to be sent to connected clients.
+	// +optional
+	NodeMapSessionBufferedChanSize *int `json:"node_map_session_buffered_chan_size,omitempty"`
+
+	// BatcherWorkers controls the number of parallel workers processing map
+	// updates for connected clients.
+	// +optional
+	BatcherWorkers *int `json:"batcher_workers,omitempty"`
+
+	// RegisterCacheCleanup is the interval between cleanup operations for
+	// expired registration cache entries.
+	// +kubebuilder:validation:Pattern=`^([0-9]+(\.[0-9]+)?(ns|us|µs|ms|s|m|h))+$`
+	// +optional
+	RegisterCacheCleanup *string `json:"register_cache_cleanup,omitempty"`
+
+	// RegisterCacheExpiration is how long registration cache entries remain
+	// valid before being eligible for cleanup.
+	// +kubebuilder:validation:Pattern=`^([0-9]+(\.[0-9]+)?(ns|us|µs|ms|s|m|h))+$`
+	// +optional
+	RegisterCacheExpiration *string `json:"register_cache_expiration,omitempty"`
+
+	// NodeStoreBatchSize controls how many write operations are accumulated
+	// before rebuilding the in-memory node snapshot.
+	//
+	// The NodeStore batches write operations (add/update/delete nodes) before
+	// rebuilding its in-memory data structures. Rebuilding involves recalculating
+	// peer relationships between all nodes based on the current ACL policy, which
+	// is computationally expensive and scales with the square of the number of nodes.
+	//
+	// By batching writes, Headscale can process N operations but only rebuild once,
+	// rather than rebuilding N times. This significantly reduces CPU usage during
+	// bulk operations like initial sync or policy updates.
+	//
+	// Trade-off: Higher values reduce CPU usage from rebuilds but increase latency
+	// for individual operations waiting for their batch to complete.
+	// +optional
+	NodeStoreBatchSize *int `json:"node_store_batch_size,omitempty"`
+
+	// NodeStoreBatchTimeout is the maximum time to wait before processing a
+	// partial batch of node operations.
+	//
+	// When NodeStoreBatchSize operations haven't accumulated, this timeout ensures
+	// writes don't wait indefinitely. The batch processes when either the size
+	// threshold is reached OR this timeout expires, whichever comes first.
+	//
+	// Trade-off: Lower values provide faster response for individual operations
+	// but trigger more frequent (expensive) peer map rebuilds. Higher values
+	// optimize for bulk throughput at the cost of individual operation latency.
+	// +kubebuilder:validation:Pattern=`^([0-9]+(\.[0-9]+)?(ns|us|µs|ms|s|m|h))+$`
+	// +optional
+	NodeStoreBatchTimeout *string `json:"node_store_batch_timeout,omitempty"`
 }
 
 // HeadscaleConfig represents the complete Headscale configuration
@@ -571,6 +654,14 @@ type HeadscaleConfig struct {
 	// +kubebuilder:default=false
 	// +optional
 	RandomizeClientPort *bool `json:"randomize_client_port,omitempty"`
+
+	// Taildrop configuration
+	// +optional
+	Taildrop TaildropConfig `json:"taildrop"`
+
+	// Tuning configuration
+	// +optional
+	Tuning Tuning `json:"tuning"`
 }
 
 // APIKeyConfig represents API key management configuration

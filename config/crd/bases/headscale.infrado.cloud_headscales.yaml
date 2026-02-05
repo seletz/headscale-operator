@@ -408,6 +408,9 @@ spec:
                         description: ClientSecretPath is the path to the OIDC client
                           secret file
                         type: string
+                      email_verified_required:
+                        description: EmailVerifiedRequired requires email verification
+                        type: boolean
                       expiry:
                         default: 180d
                         description: Expiry is the authentication expiry duration
@@ -494,6 +497,13 @@ spec:
                   server_url:
                     description: ServerURL is the URL clients will connect to
                     type: string
+                  taildrop:
+                    description: Taildrop configuration
+                    properties:
+                      enabled:
+                        description: Enabled indicates if Taildrop is enabled
+                        type: boolean
+                    type: object
                   tls_cert_path:
                     description: TLSCertPath is the path to the TLS certificate
                     type: string
@@ -522,6 +532,75 @@ spec:
                     description: TLSLetsEncryptListen is the address for Let's Encrypt
                       challenge
                     type: string
+                  tuning:
+                    description: Tuning configuration
+                    properties:
+                      batch_change_delay:
+                        description: |-
+                          BatchChangeDelay controls how long to wait before sending batched updates
+                          to clients when multiple changes occur in rapid succession.
+                        pattern: ^([0-9]+(\.[0-9]+)?(ns|us|µs|ms|s|m|h))+$
+                        type: string
+                      batcher_workers:
+                        description: |-
+                          BatcherWorkers controls the number of parallel workers processing map
+                          updates for connected clients.
+                        type: integer
+                      node_map_session_buffered_chan_size:
+                        description: |-
+                          NodeMapSessionBufferedChanSize sets the buffer size for the channel that
+                          queues map updates to be sent to connected clients.
+                        type: integer
+                      node_store_batch_size:
+                        description: |-
+                          NodeStoreBatchSize controls how many write operations are accumulated
+                          before rebuilding the in-memory node snapshot.
+
+                          The NodeStore batches write operations (add/update/delete nodes) before
+                          rebuilding its in-memory data structures. Rebuilding involves recalculating
+                          peer relationships between all nodes based on the current ACL policy, which
+                          is computationally expensive and scales with the square of the number of nodes.
+
+                          By batching writes, Headscale can process N operations but only rebuild once,
+                          rather than rebuilding N times. This significantly reduces CPU usage during
+                          bulk operations like initial sync or policy updates.
+
+                          Trade-off: Higher values reduce CPU usage from rebuilds but increase latency
+                          for individual operations waiting for their batch to complete.
+                        type: integer
+                      node_store_batch_timeout:
+                        description: |-
+                          NodeStoreBatchTimeout is the maximum time to wait before processing a
+                          partial batch of node operations.
+
+                          When NodeStoreBatchSize operations haven't accumulated, this timeout ensures
+                          writes don't wait indefinitely. The batch processes when either the size
+                          threshold is reached OR this timeout expires, whichever comes first.
+
+                          Trade-off: Lower values provide faster response for individual operations
+                          but trigger more frequent (expensive) peer map rebuilds. Higher values
+                          optimize for bulk throughput at the cost of individual operation latency.
+                        pattern: ^([0-9]+(\.[0-9]+)?(ns|us|µs|ms|s|m|h))+$
+                        type: string
+                      notifier_send_timeout:
+                        description: |-
+                          NotifierSendTimeout is the maximum time to wait when sending notifications
+                          to connected clients about network changes.
+                        pattern: ^([0-9]+(\.[0-9]+)?(ns|us|µs|ms|s|m|h))+$
+                        type: string
+                      register_cache_cleanup:
+                        description: |-
+                          RegisterCacheCleanup is the interval between cleanup operations for
+                          expired registration cache entries.
+                        pattern: ^([0-9]+(\.[0-9]+)?(ns|us|µs|ms|s|m|h))+$
+                        type: string
+                      register_cache_expiration:
+                        description: |-
+                          RegisterCacheExpiration is how long registration cache entries remain
+                          valid before being eligible for cleanup.
+                        pattern: ^([0-9]+(\.[0-9]+)?(ns|us|µs|ms|s|m|h))+$
+                        type: string
+                    type: object
                   unix_socket:
                     default: /var/run/headscale/headscale.sock
                     description: UnixSocket is the path to the Unix socket
