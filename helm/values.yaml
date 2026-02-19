@@ -35,8 +35,7 @@ podAnnotations:
   kubectl.kubernetes.io/default-container: manager
 
 # Pod labels
-podLabels:
-  control-plane: controller-manager
+podLabels: {}
 
 # Pod security context
 podSecurityContext:
@@ -121,6 +120,4 @@ args:
   - --health-probe-bind-address=:8081
 
 # Labels to apply to all resources
-commonLabels:
-  app.kubernetes.io/name: headscale-operator
-  app.kubernetes.io/managed-by: helm
+commonLabels: {}
