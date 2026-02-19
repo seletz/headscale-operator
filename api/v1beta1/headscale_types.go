@@ -17,6 +17,7 @@ limitations under the License.
 package v1beta1
 
 import (
+	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
@@ -732,6 +733,18 @@ type HeadscaleSpec struct {
 	// ImagePullSecrets is a list of references to secrets for pulling images from private registries
 	// +optional
 	ImagePullSecrets []string `json:"image_pull_secrets,omitempty"`
+
+	// ExtraEnv allows injecting additional environment variables into the Headscale container
+	// +optional
+	ExtraEnv []corev1.EnvVar `json:"extra_env,omitempty"`
+
+	// ExtraVolumes allows adding additional volumes to the Headscale pod
+	// +optional
+	ExtraVolumes []corev1.Volume `json:"extra_volumes,omitempty"`
+
+	// ExtraVolumeMounts allows adding additional volume mounts to the Headscale container
+	// +optional
+	ExtraVolumeMounts []corev1.VolumeMount `json:"extra_volume_mounts,omitempty"`
 }
 
 // HeadscaleStatus defines the observed state of Headscale.

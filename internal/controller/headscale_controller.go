@@ -499,6 +499,7 @@ func (r *HeadscaleReconciler) statefulSetForHeadscale(h *headscalev1beta1.Headsc
 					MountPath: "/var/lib/headscale",
 				},
 			},
+			Env: h.Spec.ExtraEnv,
 			LivenessProbe: &corev1.Probe{
 				ProbeHandler: corev1.ProbeHandler{
 					HTTPGet: &corev1.HTTPGetAction{
@@ -591,6 +592,14 @@ func (r *HeadscaleReconciler) statefulSetForHeadscale(h *headscalev1beta1.Headsc
 				},
 			},
 		})
+	}
+
+	// Append extra volumes and volume mounts from spec
+	if len(h.Spec.ExtraVolumes) > 0 {
+		volumes = append(volumes, h.Spec.ExtraVolumes...)
+	}
+	if len(h.Spec.ExtraVolumeMounts) > 0 {
+		containers[0].VolumeMounts = append(containers[0].VolumeMounts, h.Spec.ExtraVolumeMounts...)
 	}
 
 	return &appsv1.StatefulSet{
