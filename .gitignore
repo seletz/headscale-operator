@@ -25,6 +25,11 @@ go.work
 *.swp
 *.swo
 *~
+.zed
 
 # Kubeconfig might contain secrets
 *.kubeconfig
+
+# AI Vendor specific files
+/.claude
+/CLAUDE.md
