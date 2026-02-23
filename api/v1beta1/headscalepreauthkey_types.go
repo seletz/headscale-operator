@@ -74,6 +74,11 @@ type HeadscalePreAuthKeyStatus struct {
 	// +optional
 	KeyID string `json:"keyId,omitempty"`
 
+	// ExpiresAt is the absolute time when the preauth key expires.
+	// Computed by the controller from spec.Expiration at key creation time.
+	// +optional
+	ExpiresAt *metav1.Time `json:"expiresAt,omitempty"`
+
 	// conditions represent the current state of the HeadscalePreAuthKey resource.
 	// +listType=map
 	// +listMapKey=type
