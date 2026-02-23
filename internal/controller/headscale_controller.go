@@ -637,6 +637,9 @@ func (r *HeadscaleReconciler) statefulSetForHeadscale(h *headscalev1beta1.Headsc
 						RunAsGroup:   ptr.To(int64(65532)),
 						FSGroup:      ptr.To(int64(65532)),
 						RunAsNonRoot: ptr.To(true),
+						SeccompProfile: &corev1.SeccompProfile{
+							Type: corev1.SeccompProfileTypeRuntimeDefault,
+						},
 					},
 					Containers:       containers,
 					Volumes:          volumes,
