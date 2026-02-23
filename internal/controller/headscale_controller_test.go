@@ -657,6 +657,18 @@ var _ = Describe("Headscale Controller", func() {
 					secCtx.RunAsNonRoot != nil && *secCtx.RunAsNonRoot == true
 			}, timeout, interval).Should(BeTrue())
 
+			By("Verifying pod-level seccompProfile is set to RuntimeDefault")
+			podSecCtx := statefulSet.Spec.Template.Spec.SecurityContext
+			Expect(podSecCtx.SeccompProfile).NotTo(BeNil(), "pod should set seccompProfile")
+			Expect(podSecCtx.SeccompProfile.Type).To(Equal(corev1.SeccompProfileTypeRuntimeDefault), "pod should have RuntimeDefault seccomp profile")
+
+			By("Verifying both headscale and apikey-manager containers are present")
+			containerNames := make([]string, 0, len(statefulSet.Spec.Template.Spec.Containers))
+			for _, c := range statefulSet.Spec.Template.Spec.Containers {
+				containerNames = append(containerNames, c.Name)
+			}
+			Expect(containerNames).To(ContainElements("headscale", "apikey-manager"))
+
 			By("Verifying all containers have restricted PodSecurity container security context")
 			for _, container := range statefulSet.Spec.Template.Spec.Containers {
 				csc := container.SecurityContext
