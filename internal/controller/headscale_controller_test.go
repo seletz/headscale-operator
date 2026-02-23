@@ -19,6 +19,7 @@ package controller
 import (
 	"context"
 	"slices"
+	"strings"
 	"time"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -30,6 +31,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
+	"sigs.k8s.io/yaml"
 
 	headscalev1beta1 "github.com/infradohq/headscale-operator/api/v1beta1"
 )
@@ -706,6 +708,27 @@ var _ = Describe("Headscale Controller", func() {
 			By("Testing extractPort with invalid port")
 			port = extractPort("0.0.0.0:invalid", 8080)
 			Expect(port).To(Equal(int32(8080)))
+		})
+
+		It("should preserve empty DERP URLs in marshaled config", func() {
+			By("Creating a config with explicitly empty DERP URLs")
+			config := &headscalev1beta1.HeadscaleConfig{
+				ServerURL:  "https://headscale.example.com",
+				ListenAddr: "0.0.0.0:8080",
+				DERP: headscalev1beta1.DERPConfig{
+					URLs:  []string{},
+					Paths: []string{"/etc/derp/derp.yaml"},
+				},
+			}
+
+			By("Marshaling the config to YAML")
+			data, err := yaml.Marshal(config)
+			Expect(err).NotTo(HaveOccurred())
+
+			By("Verifying the YAML contains urls: [] and not the default")
+			yamlStr := string(data)
+			Expect(strings.Contains(yamlStr, "urls: []")).To(BeTrue(),
+				"Empty URLs should be preserved in YAML output, got:\n%s", yamlStr)
 		})
 
 		It("should generate correct labels", func() {
