@@ -657,6 +657,30 @@ var _ = Describe("Headscale Controller", func() {
 					secCtx.RunAsNonRoot != nil && *secCtx.RunAsNonRoot == true
 			}, timeout, interval).Should(BeTrue())
 
+			By("Verifying pod-level seccompProfile is set to RuntimeDefault")
+			podSecCtx := statefulSet.Spec.Template.Spec.SecurityContext
+			Expect(podSecCtx.SeccompProfile).NotTo(BeNil(), "pod should set seccompProfile")
+			Expect(podSecCtx.SeccompProfile.Type).To(Equal(corev1.SeccompProfileTypeRuntimeDefault), "pod should have RuntimeDefault seccomp profile")
+
+			By("Verifying both headscale and apikey-manager containers are present")
+			containerNames := make([]string, 0, len(statefulSet.Spec.Template.Spec.Containers))
+			for _, c := range statefulSet.Spec.Template.Spec.Containers {
+				containerNames = append(containerNames, c.Name)
+			}
+			Expect(containerNames).To(ContainElements("headscale", "apikey-manager"))
+
+			By("Verifying all containers have restricted PodSecurity container security context")
+			for _, container := range statefulSet.Spec.Template.Spec.Containers {
+				csc := container.SecurityContext
+				Expect(csc).NotTo(BeNil(), "container %s should have securityContext", container.Name)
+				Expect(csc.AllowPrivilegeEscalation).NotTo(BeNil(), "container %s should set allowPrivilegeEscalation", container.Name)
+				Expect(*csc.AllowPrivilegeEscalation).To(BeFalse(), "container %s should have allowPrivilegeEscalation=false", container.Name)
+				Expect(csc.Capabilities).NotTo(BeNil(), "container %s should set capabilities", container.Name)
+				Expect(csc.Capabilities.Drop).To(ContainElement(corev1.Capability("ALL")), "container %s should drop ALL capabilities", container.Name)
+				Expect(csc.SeccompProfile).NotTo(BeNil(), "container %s should set seccompProfile", container.Name)
+				Expect(csc.SeccompProfile.Type).To(Equal(corev1.SeccompProfileTypeRuntimeDefault), "container %s should have RuntimeDefault seccomp profile", container.Name)
+			}
+
 			By("Cleaning up the test resource")
 			Expect(k8sClient.Delete(ctx, headscale)).To(Succeed())
 		})
