@@ -787,6 +787,107 @@ var _ = Describe("Headscale Controller", func() {
 			By("Cleaning up the test resource")
 			Expect(k8sClient.Delete(ctx, headscale)).To(Succeed())
 		})
+
+		It("should include extra env, volumes, and volume mounts in StatefulSet", func() {
+			By("Creating the Headscale resource with extras")
+			headscale := &headscalev1beta1.Headscale{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      resourceName + "-extras",
+					Namespace: namespace,
+				},
+				Spec: headscalev1beta1.HeadscaleSpec{
+					Version:  "v0.28.0",
+					Replicas: 1,
+					Config: headscalev1beta1.HeadscaleConfig{
+						ServerURL:  "https://headscale.example.com",
+						ListenAddr: "0.0.0.0:8080",
+					},
+					ExtraEnv: []corev1.EnvVar{
+						{
+							Name:  "EXTRA_VAR",
+							Value: "extra-value",
+						},
+					},
+					ExtraVolumes: []corev1.Volume{
+						{
+							Name: "extra-vol",
+							VolumeSource: corev1.VolumeSource{
+								ConfigMap: &corev1.ConfigMapVolumeSource{
+									LocalObjectReference: corev1.LocalObjectReference{
+										Name: "extra-configmap",
+									},
+								},
+							},
+						},
+					},
+					ExtraVolumeMounts: []corev1.VolumeMount{
+						{
+							Name:      "extra-vol",
+							MountPath: "/etc/extra",
+							ReadOnly:  true,
+						},
+					},
+				},
+			}
+			Expect(k8sClient.Create(ctx, headscale)).To(Succeed())
+
+			extrasNamespacedName := types.NamespacedName{
+				Name:      resourceName + "-extras",
+				Namespace: namespace,
+			}
+
+			By("Reconciling the resource")
+			controllerReconciler := &HeadscaleReconciler{
+				Client: k8sClient,
+				Scheme: k8sClient.Scheme(),
+			}
+
+			_, err := controllerReconciler.Reconcile(ctx, reconcile.Request{
+				NamespacedName: extrasNamespacedName,
+			})
+			Expect(err).NotTo(HaveOccurred())
+
+			By("Verifying StatefulSet has extra environment variable")
+			statefulSet := &appsv1.StatefulSet{}
+			Eventually(func() bool {
+				err := k8sClient.Get(ctx, types.NamespacedName{
+					Name:      statefulSetName,
+					Namespace: namespace,
+				}, statefulSet)
+				if err != nil {
+					return false
+				}
+				for _, env := range statefulSet.Spec.Template.Spec.Containers[0].Env {
+					if env.Name == "EXTRA_VAR" && env.Value == "extra-value" {
+						return true
+					}
+				}
+				return false
+			}, timeout, interval).Should(BeTrue())
+
+			By("Verifying StatefulSet has extra volume")
+			hasExtraVolume := false
+			for _, vol := range statefulSet.Spec.Template.Spec.Volumes {
+				if vol.Name == "extra-vol" {
+					hasExtraVolume = true
+					break
+				}
+			}
+			Expect(hasExtraVolume).To(BeTrue())
+
+			By("Verifying StatefulSet has extra volume mount")
+			hasExtraMount := false
+			for _, mount := range statefulSet.Spec.Template.Spec.Containers[0].VolumeMounts {
+				if mount.Name == "extra-vol" && mount.MountPath == "/etc/extra" && mount.ReadOnly {
+					hasExtraMount = true
+					break
+				}
+			}
+			Expect(hasExtraMount).To(BeTrue())
+
+			By("Cleaning up the test resource")
+			Expect(k8sClient.Delete(ctx, headscale)).To(Succeed())
+		})
 	})
 
 	Context("Helper function tests", func() {
