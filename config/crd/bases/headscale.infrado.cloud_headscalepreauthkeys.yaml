@@ -30,6 +30,12 @@ spec:
     - jsonPath: .spec.ephemeral
       name: Ephemeral
       type: boolean
+    - jsonPath: .status.conditions[?(@.type=='Ready')].status
+      name: Status
+      type: string
+    - jsonPath: .status.expiresAt
+      name: ExpiresAt
+      type: date
     - jsonPath: .metadata.creationTimestamp
       name: Age
       type: date
