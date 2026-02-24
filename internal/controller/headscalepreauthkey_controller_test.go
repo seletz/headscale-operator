@@ -714,6 +714,50 @@ var _ = Describe("HeadscalePreAuthKey Controller", func() {
 			Expect(k8sClient.Delete(ctx, preAuthKey)).To(Succeed())
 		})
 
+		It("should store resolved UserID in status when using HeadscaleUserRef", func() {
+			By("Creating a HeadscalePreAuthKey with HeadscaleUserRef")
+			preAuthKey := &headscalev1beta1.HeadscalePreAuthKey{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      resourceName + "-userid-resolve",
+					Namespace: namespace,
+				},
+				Spec: headscalev1beta1.HeadscalePreAuthKeySpec{
+					HeadscaleRef:     headscaleName,
+					HeadscaleUserRef: headscaleUserName,
+					Expiration:       "1h",
+				},
+			}
+			Expect(k8sClient.Create(ctx, preAuthKey)).To(Succeed())
+
+			resolveNamespacedName := types.NamespacedName{
+				Name:      resourceName + "-userid-resolve",
+				Namespace: namespace,
+			}
+
+			By("Reconciling the resource")
+			controllerReconciler := &HeadscalePreAuthKeyReconciler{
+				Client: k8sClient,
+				Scheme: k8sClient.Scheme(),
+			}
+
+			_, err := controllerReconciler.Reconcile(ctx, reconcile.Request{
+				NamespacedName: resolveNamespacedName,
+			})
+			Expect(err).NotTo(HaveOccurred())
+
+			By("Checking that status.userId contains the resolved user ID")
+			Eventually(func() string {
+				err := k8sClient.Get(ctx, resolveNamespacedName, preAuthKey)
+				if err != nil {
+					return ""
+				}
+				return preAuthKey.Status.UserID
+			}, timeout, interval).Should(Equal("123"))
+
+			By("Cleaning up the test resource")
+			Expect(k8sClient.Delete(ctx, preAuthKey)).To(Succeed())
+		})
+
 		It("should set Ready=False when preauth key has expired", func() {
 			By("Creating a HeadscalePreAuthKey")
 			preAuthKey := &headscalev1beta1.HeadscalePreAuthKey{

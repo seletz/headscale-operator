@@ -188,6 +188,11 @@ spec:
               keyId:
                 description: KeyID is the ID of the preauth key in Headscale
                 type: string
+              userId:
+                description: |-
+                  UserID is the resolved user ID from Headscale.
+                  Populated from the referenced HeadscaleUser's status or directly from spec.userId.
+                type: string
             type: object
         required:
         - spec
