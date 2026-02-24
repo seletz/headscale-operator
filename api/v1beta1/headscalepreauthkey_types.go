@@ -77,7 +77,7 @@ type HeadscalePreAuthKeyStatus struct {
 	// UserID is the resolved user ID from Headscale.
 	// Populated from the referenced HeadscaleUser's status or directly from spec.userId.
 	// +optional
-	UserID string `json:"userId,omitempty"`
+	UserID uint64 `json:"userId,omitempty"`
 
 	// ExpiresAt is the absolute time when the preauth key expires.
 	// Computed by the controller from spec.Expiration at key creation time.
@@ -95,7 +95,7 @@ type HeadscalePreAuthKeyStatus struct {
 // +kubebuilder:subresource:status
 // +kubebuilder:resource:shortName=hspak;hspre
 // +kubebuilder:printcolumn:name="HeadscaleUser",type=string,JSONPath=`.spec.headscaleUserRef`
-// +kubebuilder:printcolumn:name="UserID",type=integer,JSONPath=`.spec.userId`
+// +kubebuilder:printcolumn:name="UserID",type=integer,JSONPath=`.status.userId`
 // +kubebuilder:printcolumn:name="Reusable",type=boolean,JSONPath=`.spec.reusable`
 // +kubebuilder:printcolumn:name="Ephemeral",type=boolean,JSONPath=`.spec.ephemeral`
 // +kubebuilder:printcolumn:name="Status",type=string,JSONPath=`.status.conditions[?(@.type=='Ready')].status`

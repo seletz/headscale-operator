@@ -746,13 +746,13 @@ var _ = Describe("HeadscalePreAuthKey Controller", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			By("Checking that status.userId contains the resolved user ID")
-			Eventually(func() string {
+			Eventually(func() uint64 {
 				err := k8sClient.Get(ctx, resolveNamespacedName, preAuthKey)
 				if err != nil {
-					return ""
+					return 0
 				}
 				return preAuthKey.Status.UserID
-			}, timeout, interval).Should(Equal("123"))
+			}, timeout, interval).Should(Equal(uint64(123)))
 
 			By("Cleaning up the test resource")
 			Expect(k8sClient.Delete(ctx, preAuthKey)).To(Succeed())

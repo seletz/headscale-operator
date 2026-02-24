@@ -21,7 +21,7 @@ spec:
     - jsonPath: .spec.headscaleUserRef
       name: HeadscaleUser
       type: string
-    - jsonPath: .spec.userId
+    - jsonPath: .status.userId
       name: UserID
       type: integer
     - jsonPath: .spec.reusable
@@ -192,7 +192,8 @@ spec:
                 description: |-
                   UserID is the resolved user ID from Headscale.
                   Populated from the referenced HeadscaleUser's status or directly from spec.userId.
-                type: string
+                format: int64
+                type: integer
             type: object
         required:
         - spec
