@@ -74,6 +74,11 @@ type HeadscalePreAuthKeyStatus struct {
 	// +optional
 	KeyID string `json:"keyId,omitempty"`
 
+	// UserID is the resolved user ID from Headscale.
+	// Populated from the referenced HeadscaleUser's status or directly from spec.userId.
+	// +optional
+	UserID string `json:"userId,omitempty"`
+
 	// ExpiresAt is the absolute time when the preauth key expires.
 	// Computed by the controller from spec.Expiration at key creation time.
 	// +optional
