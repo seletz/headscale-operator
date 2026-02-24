@@ -731,6 +731,26 @@ var _ = Describe("Headscale Controller", func() {
 				"Empty URLs should be preserved in YAML output, got:\n%s", yamlStr)
 		})
 
+		It("should omit DERP URLs when left nil to allow CRD defaults", func() {
+			By("Creating a config with nil DERP URLs")
+			config := &headscalev1beta1.HeadscaleConfig{
+				ServerURL:  "https://headscale.example.com",
+				ListenAddr: "0.0.0.0:8080",
+				DERP: headscalev1beta1.DERPConfig{
+					Paths: []string{"/etc/derp/derp.yaml"},
+				},
+			}
+
+			By("Marshaling the config to YAML")
+			data, err := yaml.Marshal(config)
+			Expect(err).NotTo(HaveOccurred())
+
+			By("Verifying the YAML does not contain an explicit urls field")
+			yamlStr := string(data)
+			Expect(strings.Contains(yamlStr, "urls:")).To(BeFalse(),
+				"Nil URLs should be omitted from YAML to allow CRD defaults, got:\n%s", yamlStr)
+		})
+
 		It("should generate correct labels", func() {
 			By("Testing labelsForHeadscale")
 			labels := labelsForHeadscale("test-instance")
