@@ -19,7 +19,6 @@ package controller
 import (
 	"context"
 	"slices"
-	"strings"
 	"time"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -721,14 +720,18 @@ var _ = Describe("Headscale Controller", func() {
 				},
 			}
 
-			By("Marshaling the config to YAML")
+			By("Marshaling the config to YAML and unmarshaling to map")
 			data, err := yaml.Marshal(config)
 			Expect(err).NotTo(HaveOccurred())
+			var result map[string]any
+			Expect(yaml.Unmarshal(data, &result)).To(Succeed())
 
-			By("Verifying the YAML contains urls: [] and not the default")
-			yamlStr := string(data)
-			Expect(strings.Contains(yamlStr, "urls: []")).To(BeTrue(),
-				"Empty URLs should be preserved in YAML output, got:\n%s", yamlStr)
+			By("Verifying the derp.urls key is present and is an empty list")
+			derp, ok := result["derp"].(map[string]any)
+			Expect(ok).To(BeTrue(), "expected derp key in config")
+			urls, exists := derp["urls"]
+			Expect(exists).To(BeTrue(), "expected urls key in derp config")
+			Expect(urls).To(BeEmpty(), "expected urls to be an empty list")
 		})
 
 		It("should omit DERP URLs when left nil to allow CRD defaults", func() {
@@ -741,14 +744,17 @@ var _ = Describe("Headscale Controller", func() {
 				},
 			}
 
-			By("Marshaling the config to YAML")
+			By("Marshaling the config to YAML and unmarshaling to map")
 			data, err := yaml.Marshal(config)
 			Expect(err).NotTo(HaveOccurred())
+			var result map[string]any
+			Expect(yaml.Unmarshal(data, &result)).To(Succeed())
 
-			By("Verifying the YAML does not contain an explicit urls field")
-			yamlStr := string(data)
-			Expect(strings.Contains(yamlStr, "urls:")).To(BeFalse(),
-				"Nil URLs should be omitted from YAML to allow CRD defaults, got:\n%s", yamlStr)
+			By("Verifying the urls key is absent from derp config")
+			derp, ok := result["derp"].(map[string]any)
+			Expect(ok).To(BeTrue(), "expected derp key in config")
+			_, exists := derp["urls"]
+			Expect(exists).To(BeFalse(), "nil URLs should be omitted to allow CRD defaults")
 		})
 
 		It("should generate correct labels", func() {
