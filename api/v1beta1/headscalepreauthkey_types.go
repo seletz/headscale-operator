@@ -99,7 +99,7 @@ type HeadscalePreAuthKeyStatus struct {
 // +kubebuilder:printcolumn:name="Reusable",type=boolean,JSONPath=`.spec.reusable`
 // +kubebuilder:printcolumn:name="Ephemeral",type=boolean,JSONPath=`.spec.ephemeral`
 // +kubebuilder:printcolumn:name="Status",type=string,JSONPath=`.status.conditions[?(@.type=='Ready')].status`
-// +kubebuilder:printcolumn:name="ExpiresAt",type=date,JSONPath=`.status.expiresAt`
+// +kubebuilder:printcolumn:name="ExpiresAt",type=string,JSONPath=`.status.expiresAt`
 // +kubebuilder:printcolumn:name="Age",type=date,JSONPath=`.metadata.creationTimestamp`
 // +kubebuilder:validation:XValidation:rule="(has(self.spec.headscaleUserRef) && self.spec.headscaleUserRef != \"\") != (has(self.spec.userId) && self.spec.userId != 0)",message="exactly one of spec.headscaleUserRef or spec.userId must be specified"
 

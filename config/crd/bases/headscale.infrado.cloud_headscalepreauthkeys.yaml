@@ -35,7 +35,7 @@ spec:
       type: string
     - jsonPath: .status.expiresAt
       name: ExpiresAt
-      type: date
+      type: string
     - jsonPath: .metadata.creationTimestamp
       name: Age
       type: date
