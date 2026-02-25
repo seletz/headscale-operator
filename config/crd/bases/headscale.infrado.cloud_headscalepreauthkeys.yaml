@@ -21,7 +21,7 @@ spec:
     - jsonPath: .spec.headscaleUserRef
       name: HeadscaleUser
       type: string
-    - jsonPath: .spec.userId
+    - jsonPath: .status.userId
       name: UserID
       type: integer
     - jsonPath: .spec.reusable
@@ -30,6 +30,12 @@ spec:
     - jsonPath: .spec.ephemeral
       name: Ephemeral
       type: boolean
+    - jsonPath: .status.conditions[?(@.type=='Ready')].status
+      name: Status
+      type: string
+    - jsonPath: .status.expiresAt
+      name: ExpiresAt
+      type: string
     - jsonPath: .metadata.creationTimestamp
       name: Age
       type: date
@@ -182,6 +188,12 @@ spec:
               keyId:
                 description: KeyID is the ID of the preauth key in Headscale
                 type: string
+              userId:
+                description: |-
+                  UserID is the resolved user ID from Headscale.
+                  Populated from the referenced HeadscaleUser's status or directly from spec.userId.
+                format: int64
+                type: integer
             type: object
         required:
         - spec

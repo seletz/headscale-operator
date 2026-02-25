@@ -74,6 +74,11 @@ type HeadscalePreAuthKeyStatus struct {
 	// +optional
 	KeyID string `json:"keyId,omitempty"`
 
+	// UserID is the resolved user ID from Headscale.
+	// Populated from the referenced HeadscaleUser's status or directly from spec.userId.
+	// +optional
+	UserID uint64 `json:"userId,omitempty"`
+
 	// ExpiresAt is the absolute time when the preauth key expires.
 	// Computed by the controller from spec.Expiration at key creation time.
 	// +optional
@@ -90,9 +95,11 @@ type HeadscalePreAuthKeyStatus struct {
 // +kubebuilder:subresource:status
 // +kubebuilder:resource:shortName=hspak;hspre
 // +kubebuilder:printcolumn:name="HeadscaleUser",type=string,JSONPath=`.spec.headscaleUserRef`
-// +kubebuilder:printcolumn:name="UserID",type=integer,JSONPath=`.spec.userId`
+// +kubebuilder:printcolumn:name="UserID",type=integer,JSONPath=`.status.userId`
 // +kubebuilder:printcolumn:name="Reusable",type=boolean,JSONPath=`.spec.reusable`
 // +kubebuilder:printcolumn:name="Ephemeral",type=boolean,JSONPath=`.spec.ephemeral`
+// +kubebuilder:printcolumn:name="Status",type=string,JSONPath=`.status.conditions[?(@.type=='Ready')].status`
+// +kubebuilder:printcolumn:name="ExpiresAt",type=string,JSONPath=`.status.expiresAt`
 // +kubebuilder:printcolumn:name="Age",type=date,JSONPath=`.metadata.creationTimestamp`
 // +kubebuilder:validation:XValidation:rule="(has(self.spec.headscaleUserRef) && self.spec.headscaleUserRef != \"\") != (has(self.spec.userId) && self.spec.userId != 0)",message="exactly one of spec.headscaleUserRef or spec.userId must be specified"
 

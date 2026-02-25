@@ -203,6 +203,14 @@ func (r *HeadscalePreAuthKeyReconciler) Reconcile(ctx context.Context, req ctrl.
 		userID = preAuthKey.Spec.UserID
 	}
 
+	// Store resolved UserID in status
+	if preAuthKey.Status.UserID != userID {
+		preAuthKey.Status.UserID = userID
+		if err := r.Status().Update(ctx, preAuthKey); err != nil {
+			return ctrl.Result{}, fmt.Errorf("failed to update UserID in status: %w", err)
+		}
+	}
+
 	// Check if the preauth key already exists
 	if preAuthKey.Status.KeyID != "" {
 		return r.reconcileExistingKey(ctx, preAuthKey)
