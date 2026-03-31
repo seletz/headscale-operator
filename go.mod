@@ -14,9 +14,13 @@ require (
 	k8s.io/api v0.35.0
 	k8s.io/apimachinery v0.35.0
 	k8s.io/client-go v0.35.0
+<<<<<<< HEAD
+	sigs.k8s.io/controller-runtime v0.23.3
+=======
 	k8s.io/utils v0.0.0-20260108192941-914a6e750570
 	sigs.k8s.io/controller-runtime v0.23.1
 	sigs.k8s.io/yaml v1.6.0
+>>>>>>> tmp-original-31-03-26-01-17
 )
 
 require (
