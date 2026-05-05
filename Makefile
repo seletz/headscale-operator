@@ -1,7 +1,12 @@
 # Image URL to use all building/pushing image targets
 IMG ?= controller:latest
+<<<<<<< HEAD
+# YEAR defines the year value used for substituting the YEAR placeholder in the boilerplate header.
+YEAR ?= $(shell date +%Y)
+=======
 # API Key Manager image
 APIKEY_MANAGER_IMG ?= apikey-manager:latest
+>>>>>>> tmp-original-05-05-26-01-48
 
 # Get the currently used golang install path (in GOPATH/bin, unless GOBIN is set)
 ifeq (,$(shell go env GOBIN))
@@ -49,7 +54,7 @@ manifests: controller-gen ## Generate WebhookConfiguration, ClusterRole and Cust
 
 .PHONY: generate
 generate: controller-gen ## Generate code containing DeepCopy, DeepCopyInto, and DeepCopyObject method implementations.
-	"$(CONTROLLER_GEN)" object:headerFile="hack/boilerplate.go.txt" paths="./..."
+	"$(CONTROLLER_GEN)" object paths="./..."
 
 .PHONY: fmt
 fmt: ## Run go fmt against code.
@@ -65,6 +70,8 @@ test: manifests generate fmt vet setup-envtest ## Run tests.
 
 # TODO(user): To use a different vendor for e2e tests, modify the setup under 'tests/e2e'.
 # The default setup assumes Kind is pre-installed and builds/loads the Manager Docker image locally.
+# kubectl kuberc is disabled by default for test isolation; enable with:
+# - KUBECTL_KUBERC=true
 # CertManager is installed by default; skip with:
 # - CERT_MANAGER_INSTALL_SKIP=true
 KIND_CLUSTER ?= headscale-operator-test-e2e
@@ -223,7 +230,7 @@ ENVTEST_K8S_VERSION ?= $(shell v='$(call gomodver,k8s.io/api)'; \
   [ -n "$$v" ] || { echo "Set ENVTEST_K8S_VERSION manually (k8s.io/api replace has no tag)" >&2; exit 1; }; \
   printf '%s\n' "$$v" | sed -E 's/^v?[0-9]+\.([0-9]+).*/1.\1/')
 
-GOLANGCI_LINT_VERSION ?= v2.8.0
+GOLANGCI_LINT_VERSION ?= v2.11.4
 .PHONY: kustomize
 kustomize: $(KUSTOMIZE) ## Download kustomize locally if necessary.
 $(KUSTOMIZE): $(LOCALBIN)

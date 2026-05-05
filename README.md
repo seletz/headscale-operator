@@ -413,8 +413,13 @@ We welcome contributions! Here's how you can help:
 5. **Commit your changes** using conventional commits
 6. **Open a pull request** with a clear description of your changes
 
+<<<<<<< HEAD
+## License
+
+=======
 ## Acknowledgments
 
 - [Headscale](https://github.com/juanfont/headscale) - The awesome project this operator manages
 - [Kubebuilder](https://book.kubebuilder.io/) - The framework used to build this operator
 - All our [contributors](https://github.com/infradohq/headscale-operator/graphs/contributors)
+>>>>>>> tmp-original-05-05-26-01-48

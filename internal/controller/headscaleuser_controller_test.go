@@ -1,3 +1,18 @@
+<<<<<<< HEAD
+package controller
+
+import (
+	. "github.com/onsi/ginkgo/v2"
+)
+
+var _ = Describe("HeadscaleUser Controller", func() {
+	Context("When reconciling a resource", func() {
+
+		It("should successfully reconcile the resource", func() {
+
+			// TODO(user): Add more specific assertions depending on your controller's reconciliation logic.
+			// Example: If you expect a certain status condition after reconciliation, verify it here.
+=======
 /*
 Copyright 2025.
 
@@ -508,6 +523,7 @@ var _ = Describe("HeadscaleUser Controller", func() {
 			By("Cleaning up test resources")
 			Expect(k8sClient.Delete(ctx, user1)).To(Succeed())
 			Expect(k8sClient.Delete(ctx, user2)).To(Succeed())
+>>>>>>> tmp-original-05-05-26-01-48
 		})
 	})
 })
