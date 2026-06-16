@@ -1,3 +1,18 @@
+<<<<<<< HEAD
+package controller
+
+import (
+	. "github.com/onsi/ginkgo/v2"
+)
+
+var _ = Describe("Headscale Controller", func() {
+	Context("When reconciling a resource", func() {
+
+		It("should successfully reconcile the resource", func() {
+
+			// TODO(user): Add more specific assertions depending on your controller's reconciliation logic.
+			// Example: If you expect a certain status condition after reconciliation, verify it here.
+=======
 /*
 Copyright 2025.
 
@@ -840,6 +855,7 @@ var _ = Describe("Headscale Controller", func() {
 			Expect(labels["app.kubernetes.io/name"]).To(Equal("headscale"))
 			Expect(labels["app.kubernetes.io/instance"]).To(Equal("test-instance"))
 			Expect(labels["app.kubernetes.io/managed-by"]).To(Equal("headscale-operator"))
+>>>>>>> tmp-original-16-06-26-02-39
 		})
 	})
 })

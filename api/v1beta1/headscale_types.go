@@ -1,3 +1,5 @@
+<<<<<<< HEAD
+=======
 /*
 Copyright 2025.
 
@@ -14,12 +16,14 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
+>>>>>>> tmp-original-16-06-26-02-39
 package v1beta1
 
 import (
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
 )
 
 // NoiseConfig represents the Noise protocol configuration
@@ -799,5 +803,8 @@ type HeadscaleList struct {
 }
 
 func init() {
-	SchemeBuilder.Register(&Headscale{}, &HeadscaleList{})
+	SchemeBuilder.Register(func(s *runtime.Scheme) error {
+		s.AddKnownTypes(SchemeGroupVersion, &Headscale{}, &HeadscaleList{})
+		return nil
+	})
 }

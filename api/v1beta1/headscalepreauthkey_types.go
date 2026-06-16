@@ -1,3 +1,5 @@
+<<<<<<< HEAD
+=======
 /*
 Copyright 2025.
 
@@ -14,10 +16,12 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
+>>>>>>> tmp-original-16-06-26-02-39
 package v1beta1
 
 import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
 )
 
 // HeadscalePreAuthKeySpec defines the desired state of HeadscalePreAuthKey
@@ -118,5 +122,8 @@ type HeadscalePreAuthKeyList struct {
 }
 
 func init() {
-	SchemeBuilder.Register(&HeadscalePreAuthKey{}, &HeadscalePreAuthKeyList{})
+	SchemeBuilder.Register(func(s *runtime.Scheme) error {
+		s.AddKnownTypes(SchemeGroupVersion, &HeadscalePreAuthKey{}, &HeadscalePreAuthKeyList{})
+		return nil
+	})
 }
